@@ -8,6 +8,10 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(ctx: ExecutionContext): boolean {
+    // Bypass total cuando ROLES_ENABLED=false (modo revisión interna).
+    // Sigue requiriendo autenticación — solo se salta el chequeo de roles.
+    if (process.env.ROLES_ENABLED === 'false') return true;
+
     const required = this.reflector.getAllAndOverride<Rol[]>(ROLES_KEY, [
       ctx.getHandler(),
       ctx.getClass(),

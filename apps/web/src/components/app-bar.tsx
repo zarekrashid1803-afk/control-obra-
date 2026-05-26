@@ -52,7 +52,10 @@ export function AppBar() {
   }
 
   const userRoles = user?.roles || [];
+  // Bypass cuando NEXT_PUBLIC_ROLES_ENABLED=false (modo revisión interna). Muestra todo el menú.
+  const rolesEnabled = process.env.NEXT_PUBLIC_ROLES_ENABLED !== 'false';
   const visibleItems = navItems.filter(item => {
+    if (!rolesEnabled) return true;
     if (!item.rolesPermitidos) return true;
     return item.rolesPermitidos.some(r => userRoles.includes(r));
   });
