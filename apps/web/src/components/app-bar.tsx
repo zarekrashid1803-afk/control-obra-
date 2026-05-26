@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { auth, setToken, setRefreshToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { LogoOrion } from './logo-orion';
 
 type NavItem = {
   href: string;
@@ -64,12 +65,8 @@ export function AppBar() {
       {/* ============================================================ */}
       <aside className="hidden lg:flex lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:flex-col bg-navy-800 text-white z-40 shadow-xl">
         {/* Brand */}
-        <Link href="/dashboard" className="flex items-center gap-3 px-5 py-4 border-b border-white/10 hover:bg-white/5 transition">
-          <div className="w-9 h-9 bg-gold-500 text-navy-900 rounded grid place-items-center font-mono font-bold text-[13px] flex-shrink-0">CO</div>
-          <div className="min-w-0">
-            <div className="text-[14px] font-semibold leading-tight truncate">Control de Obra</div>
-            <div className="text-[9.5px] text-gold-500 tracking-[2px] font-medium">CONSTRUCTORA ANDINA</div>
-          </div>
+        <Link href="/dashboard" className="flex items-center px-5 py-5 border-b border-white/10 hover:bg-white/5 transition">
+          <LogoOrion className="h-8 w-auto text-white" />
         </Link>
 
         {/* Nav */}
@@ -134,9 +131,9 @@ export function AppBar() {
             </svg>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 bg-gold-500 text-navy-900 rounded grid place-items-center font-mono font-bold text-[11px] flex-shrink-0">CO</div>
+            <LogoOrion className="h-6 w-auto text-white flex-shrink-0" />
             <span className="text-[15px] font-semibold truncate">
-              {currentItem?.label || 'Control de Obra'}
+              {currentItem?.label || ''}
             </span>
           </Link>
         </div>
@@ -164,12 +161,8 @@ export function AppBar() {
               className="bg-navy-700 text-white p-4"
               style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
             >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gold-500 text-navy-900 rounded grid place-items-center font-mono font-bold">CO</div>
-                <div className="flex-1">
-                  <div className="font-semibold leading-tight">Control de Obra</div>
-                  <div className="text-[10.5px] text-gold-500 tracking-[2px]">CONSTRUCTORA ANDINA</div>
-                </div>
+              <div className="mb-4">
+                <LogoOrion className="h-8 w-auto text-white" />
               </div>
               <div className="flex items-center gap-2 pt-3 border-t border-white/10">
                 <div className="w-9 h-9 rounded-full bg-gold-500 text-navy-900 grid place-items-center font-semibold text-[12px]">

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, setToken, setRefreshToken, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { LogoOrion } from '@/components/logo-orion';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,12 +37,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative">
       <form className="w-full max-w-sm" onSubmit={onSubmit}>
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-12 h-12 bg-navy-900 text-white rounded-lg grid place-items-center font-mono font-bold text-xl">CO</div>
-          <div>
-            <div className="text-lg font-semibold text-navy-900">Control de Obra</div>
-            <div className="text-[10.5px] text-gray-500 tracking-[2px] font-medium">CONSTRUCTORA ANDINA</div>
-          </div>
+        <div className="mb-10 flex justify-start">
+          <LogoOrion className="h-16 w-auto text-navy-900" />
         </div>
 
         <h2 className="text-2xl font-bold text-navy-900 mb-1">Iniciar sesión</h2>
