@@ -21,14 +21,14 @@ const EMPTY: FrenteForm = {
   codigo: '',
   nombre: '',
   presupuestoPesos: '',
-  colorHex: '#2f5d8a',
+  colorHex: '#686B6C',
   estado: 'activo',
   ubicacion: '',
   fechaInicio: '',
   fechaFinEstimada: '',
 };
 
-const COLORS = ['#2f5d8a', '#c9a64a', '#dc2626', '#059669', '#7c3aed', '#0891b2'];
+const COLORS = ['#000000', '#686B6C', '#AEBFCA', '#dc2626', '#059669', '#7c3aed', '#0891b2'];
 
 function FrentesInner() {
   const router = useRouter();
@@ -50,7 +50,7 @@ function FrentesInner() {
         codigo: editingFrente.codigo,
         nombre: editingFrente.nombre,
         presupuestoPesos: String(Number(editingFrente.presupuestoTotalCentavos) / 100),
-        colorHex: editingFrente.colorHex || '#2f5d8a',
+        colorHex: editingFrente.colorHex || '#686B6C',
         estado: editingFrente.estado,
         ubicacion: editingFrente.ubicacion || '',
         fechaInicio: editingFrente.fechaInicio?.slice(0, 10) || '',

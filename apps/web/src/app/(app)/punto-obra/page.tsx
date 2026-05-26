@@ -53,7 +53,7 @@ export default function PuntoObraPage() {
           return (
             <div key={f.id} className="card overflow-hidden">
               {/* Header con color del frente */}
-              <div className="px-4 py-3 text-white" style={{ background: f.colorHex || '#1a3a5c' }}>
+              <div className="px-4 py-3 text-white" style={{ background: f.colorHex || '#000000' }}>
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <div className="font-mono text-[12px] opacity-80">{f.codigo}</div>

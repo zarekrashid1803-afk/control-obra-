@@ -5,21 +5,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Paleta principal — Black + Dove Grey (token `navy` por compatibilidad)
         navy: {
-          900: '#0d2540',
-          800: '#14304f',
-          700: '#1a3a5c',
-          600: '#234a73',
-          500: '#2f5d8a',
-          100: '#e8eef5',
-          50: '#f4f7fb',
+          900: '#000000', // Black
+          800: '#1a1a1a',
+          700: '#2d2d2d',
+          600: '#4a4d4e',
+          500: '#686B6C', // Dove Grey
+          100: '#e8eaeb',
+          50:  '#f5f6f7',
         },
+        // Acento — Casper (token `gold` por compatibilidad)
         gold: {
-          700: '#8b6914',
-          600: '#b08526',
-          500: '#c9a64a',
-          400: '#dab771',
-          100: '#fdf8ec',
+          700: '#6b7d8a',
+          600: '#8a9da9',
+          500: '#AEBFCA', // Casper
+          400: '#c5d2db',
+          100: '#e8eef2',
         },
         // Estados de requisición (los 7)
         st: {
