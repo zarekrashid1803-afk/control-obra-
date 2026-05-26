@@ -317,7 +317,7 @@ function FrentesInner() {
             <Field label="Responsable de obra">
               <select value={form.responsableId} onChange={(e) => setForm({ ...form, responsableId: e.target.value })} className="input">
                 <option value="">— Sin asignar —</option>
-                {(usuariosQ.data || []).map((u: any) => (
+                {(usuariosQ.data?.data || []).map((u: any) => (
                   <option key={u.id} value={u.id}>{u.nombres} {u.apellidos}</option>
                 ))}
               </select>
