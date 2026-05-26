@@ -6,6 +6,9 @@
 # ---------- Stage 1: Builder ----------
 FROM node:20-alpine AS builder
 
+# OpenSSL requerido por Prisma en Alpine (silencia warning de libssl)
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /repo
 
 # Copiar archivos de configuración del monorepo
@@ -15,8 +18,11 @@ COPY tsconfig.base.json ./
 # Copiar paquetes que necesita el API
 COPY packages/shared/ ./packages/shared/
 COPY apps/api/package*.json ./apps/api/
+# IMPORTANTE: prisma/ se copia ANTES del npm install porque el postinstall
+# hook corre `prisma generate` y necesita encontrar el schema.
+COPY apps/api/prisma/ ./apps/api/prisma/
 
-# Instalar dependencias del monorepo
+# Instalar dependencias del monorepo (incluye postinstall: prisma generate)
 RUN npm install --no-audit --no-fund
 
 # Build del paquete shared primero
@@ -32,6 +38,9 @@ RUN npx tsc -p tsconfig.json
 
 # ---------- Stage 2: Runtime ----------
 FROM node:20-alpine AS runner
+
+# OpenSSL también necesario en runtime para Prisma
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
