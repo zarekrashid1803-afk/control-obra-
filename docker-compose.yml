@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: control_obra_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: control_obra
+      POSTGRES_PASSWORD: control_obra_dev
+      POSTGRES_DB: control_obra
+      TZ: America/Bogota
+      PGTZ: America/Bogota
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U control_obra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: control_obra_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./.redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  adminer:
+    image: adminer:4
+    container_name: control_obra_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy

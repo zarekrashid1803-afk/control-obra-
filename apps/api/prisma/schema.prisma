@@ -1,0 +1,673 @@
+// ============================================================
+// Sistema Integral de Gestión y Control de Obra
+// Schema Prisma — derivado de Tecnico/01_MODELO_DE_DATOS.md
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// IDENTIDAD Y ORGANIZACIÓN
+// ============================================================
+
+model Tenant {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  nit       String?  @unique
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  usuarios       Usuario[]
+  frentes        FrenteObra[]
+  proveedores    Proveedor[]
+  materiales     Material[]
+  requisiciones  Requisicion[]
+  ordenesCompra  OrdenCompra[]
+  movimientos    MovimientoCaja[]
+  arqueos        ArqueoCaja[]
+  configuracion  Configuracion[]
+  auditLogs      AuditLog[]
+
+  @@map("tenant")
+}
+
+model Rol {
+  id            String   @id // 'director', 'residente', etc.
+  nombreDisplay String   @map("nombre_display")
+  descripcion   String?
+  permisos      Json     // array de strings
+
+  usuariosRoles UsuarioRol[]
+
+  @@map("rol")
+}
+
+model Usuario {
+  id                       String    @id @default(uuid())
+  tenantId                 Int       @default(1) @map("tenant_id")
+  email                    String    @unique
+  nombres                  String
+  apellidos                String
+  iniciales                String
+  passwordHash             String    @map("password_hash")
+  passwordChangeRequired   Boolean   @default(true) @map("password_change_required")
+  mfaSecret                String?   @map("mfa_secret")
+  mfaEnabled               Boolean   @default(false) @map("mfa_enabled")
+  frentesAsignados         String[]  @default([]) @map("frentes_asignados")
+  activo                   Boolean   @default(true)
+  ultimoLoginAt            DateTime? @map("ultimo_login_at")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
+
+  tenant                   Tenant    @relation(fields: [tenantId], references: [id])
+  roles                    UsuarioRol[]
+  sesiones                 Sesion[]
+
+  requisicionesCreadas     Requisicion[] @relation("RequisicionSolicitante")
+  requisicionesAvaladas    Requisicion[] @relation("RequisicionAvalador")
+  requisicionesAprobadas   Requisicion[] @relation("RequisicionAprobador")
+  ocCreadas                OrdenCompra[]
+  movimientosRegistrados   MovimientoCaja[]
+  arqueosResponsable       ArqueoCaja[]
+  estadoHistorial          RequisicionEstadoHistorial[]
+  observaciones            RequisicionObservacion[]
+  frentesResponsable       FrenteObra[] @relation("FrenteResponsable")
+  bodegaEntradas           BodegaEntrada[]
+  bodegaSalidas            BodegaSalida[]
+  notificacionesRecibidas  Notificacion[]
+  auditLogs                AuditLog[]
+  documentosSoporte        DocumentoSoporte[]
+
+  @@index([tenantId])
+  @@index([activo])
+  @@map("usuario")
+}
+
+model UsuarioRol {
+  usuarioId String @map("usuario_id")
+  rolId     String @map("rol_id")
+  asignadoAt DateTime @default(now()) @map("asignado_at")
+
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rol       Rol     @relation(fields: [rolId], references: [id])
+
+  @@id([usuarioId, rolId])
+  @@map("usuario_rol")
+}
+
+model Sesion {
+  id              String   @id @default(uuid())
+  usuarioId       String   @map("usuario_id")
+  refreshTokenHash String  @map("refresh_token_hash")
+  ip              String?
+  userAgent       String?  @map("user_agent")
+  emitidoAt       DateTime @default(now()) @map("emitido_at")
+  expiraAt        DateTime @map("expira_at")
+  revocadoAt      DateTime? @map("revocado_at")
+
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([refreshTokenHash])
+  @@map("sesion")
+}
+
+// ============================================================
+// CATÁLOGOS
+// ============================================================
+
+model FrenteObra {
+  id                       String    @id @default(uuid())
+  tenantId                 Int       @default(1) @map("tenant_id")
+  codigo                   String    @unique
+  nombre                   String
+  presupuestoTotalCentavos BigInt    @map("presupuesto_total_centavos")
+  consumidoCentavos        BigInt    @default(0) @map("consumido_centavos")
+  colorHex                 String    @default("#2f5d8a") @map("color_hex")
+  estado                   String    @default("activo") // activo | pausado | cerrado
+  fechaInicio              DateTime? @map("fecha_inicio")
+  fechaFinEstimada         DateTime? @map("fecha_fin_estimada")
+  ubicacion                String?
+  responsableId            String?   @map("responsable_id")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
+
+  tenant                   Tenant    @relation(fields: [tenantId], references: [id])
+  responsable              Usuario?  @relation("FrenteResponsable", fields: [responsableId], references: [id])
+  requisiciones            Requisicion[]
+  ordenesCompra            OrdenCompra[]
+  movimientos              MovimientoCaja[]
+  salidasBodega            BodegaSalida[]
+  inventario               InventarioFrente[]
+  documentosSoporte        DocumentoSoporte[]
+
+  @@index([estado])
+  @@map("frente_obra")
+}
+
+model Proveedor {
+  id                  String   @id @default(uuid())
+  tenantId            Int      @default(1) @map("tenant_id")
+  codigo              String   @unique
+  nit                 String   @unique
+  razonSocial         String   @map("razon_social")
+  tipoPersona         String   @default("juridica") @map("tipo_persona") // juridica | natural
+  regimenIva          String   @default("responsable_iva") @map("regimen_iva")
+  autorretenedor      Boolean  @default(false)
+  granContribuyente   Boolean  @default(false) @map("gran_contribuyente")
+  direccion           String?
+  ciudad              String?
+  telefono            String?
+  email               String?
+  condicionesPago     String   @default("credito_30") @map("condiciones_pago")
+  rating              Decimal? @db.Decimal(2, 1)
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+  materiales          Material[]
+  ordenesCompra       OrdenCompra[]
+  movimientosCaja     MovimientoCaja[]
+  documentosSoporte   DocumentoSoporte[]
+
+  @@map("proveedor")
+}
+
+model Material {
+  id                          String   @id @default(uuid())
+  tenantId                    Int      @default(1) @map("tenant_id")
+  sku                         String   @unique
+  descripcion                 String
+  unidad                      String
+  categoria                   String?
+  precioReferenciaCentavos    BigInt   @default(0) @map("precio_referencia_centavos")
+  stockMinimo                 Decimal  @default(0) @db.Decimal(15, 3) @map("stock_minimo")
+  proveedorPreferenteId       String?  @map("proveedor_preferente_id")
+  activo                      Boolean  @default(true)
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  tenant                      Tenant   @relation(fields: [tenantId], references: [id])
+  proveedorPreferente         Proveedor? @relation(fields: [proveedorPreferenteId], references: [id])
+  requisicionItems            RequisicionItem[]
+  ocItems                     OrdenCompraItem[]
+  inventario                  InventarioFrente[]
+  bodegaSalidaItems           BodegaSalidaItem[]
+
+  @@index([sku])
+  @@index([activo])
+  @@map("material")
+}
+
+// ============================================================
+// REQUISICIONES (corazón del sistema)
+// ============================================================
+
+model Requisicion {
+  id                   String    @id @default(uuid())
+  tenantId             Int       @default(1) @map("tenant_id")
+  codigo               String    @unique
+  frenteId             String    @map("frente_id")
+  solicitanteId        String    @map("solicitante_id")
+  descripcion          String
+  prioridad            String    @default("normal") // normal | urgente
+  estado               String    @default("borrador") // los 7 estados
+  motivoRechazo        String?   @map("motivo_rechazo")
+  aprobadorId          String?   @map("aprobador_id")
+  avaladorId           String?   @map("avalador_id")
+  subtotalCentavos     BigInt    @default(0) @map("subtotal_centavos")
+  ivaCentavos          BigInt    @default(0) @map("iva_centavos")
+  retencionesCentavos  BigInt    @default(0) @map("retenciones_centavos")
+  totalCentavos        BigInt    @default(0) @map("total_centavos")
+  sobrePresupuesto     Boolean   @default(false) @map("sobre_presupuesto")
+  ordenCompraId        String?   @unique @map("orden_compra_id")
+  fechaCreacion        DateTime  @default(now()) @map("fecha_creacion")
+  fechaAprobacion      DateTime? @map("fecha_aprobacion")
+  fechaCierre          DateTime? @map("fecha_cierre")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
+  tenant               Tenant    @relation(fields: [tenantId], references: [id])
+  frente               FrenteObra @relation(fields: [frenteId], references: [id])
+  solicitante          Usuario   @relation("RequisicionSolicitante", fields: [solicitanteId], references: [id])
+  avalador             Usuario?  @relation("RequisicionAvalador", fields: [avaladorId], references: [id])
+  aprobador            Usuario?  @relation("RequisicionAprobador", fields: [aprobadorId], references: [id])
+  ordenCompra          OrdenCompra? @relation(fields: [ordenCompraId], references: [id])
+
+  items                RequisicionItem[]
+  historial            RequisicionEstadoHistorial[]
+  observaciones        RequisicionObservacion[]
+
+  @@index([estado])
+  @@index([frenteId, estado])
+  @@index([solicitanteId])
+  @@index([createdAt])
+  @@map("requisicion")
+}
+
+model RequisicionItem {
+  id                                String   @id @default(uuid())
+  requisicionId                     String   @map("requisicion_id")
+  orden                             Int      @default(0)
+  materialId                        String?  @map("material_id")
+  descripcionSnapshot               String   @map("descripcion_snapshot")
+  unidadSnapshot                    String   @map("unidad_snapshot")
+  cantidad                          Decimal  @db.Decimal(15, 3)
+  precioUnitarioCentavosSnapshot    BigInt   @map("precio_unitario_centavos_snapshot")
+  subtotalCentavos                  BigInt   @map("subtotal_centavos")
+  notas                             String?
+
+  requisicion                       Requisicion @relation(fields: [requisicionId], references: [id], onDelete: Cascade)
+  material                          Material?   @relation(fields: [materialId], references: [id])
+
+  @@index([requisicionId])
+  @@map("requisicion_item")
+}
+
+model RequisicionEstadoHistorial {
+  id              String   @id @default(uuid())
+  requisicionId   String   @map("requisicion_id")
+  estadoAnterior  String?  @map("estado_anterior")
+  estadoNuevo     String   @map("estado_nuevo")
+  actorId         String   @map("actor_id")
+  observacion     String?
+  creadoAt        DateTime @default(now()) @map("creado_at")
+
+  requisicion     Requisicion @relation(fields: [requisicionId], references: [id], onDelete: Cascade)
+  actor           Usuario @relation(fields: [actorId], references: [id])
+
+  @@index([requisicionId])
+  @@map("requisicion_estado_historial")
+}
+
+model RequisicionObservacion {
+  id              String   @id @default(uuid())
+  requisicionId   String   @map("requisicion_id")
+  autorId         String   @map("autor_id")
+  texto           String
+  creadoAt        DateTime @default(now()) @map("creado_at")
+
+  requisicion     Requisicion @relation(fields: [requisicionId], references: [id], onDelete: Cascade)
+  autor           Usuario @relation(fields: [autorId], references: [id])
+
+  @@index([requisicionId])
+  @@map("requisicion_observacion")
+}
+
+// ============================================================
+// ÓRDENES DE COMPRA
+// ============================================================
+
+model OrdenCompra {
+  id                          String    @id @default(uuid())
+  tenantId                    Int       @default(1) @map("tenant_id")
+  codigo                      String    @unique
+  proveedorId                 String    @map("proveedor_id")
+  frenteId                    String    @map("frente_id")
+  generadaPorId               String    @map("generada_por_id")
+  estado                      String    @default("borrador") // borrador | enviada | en_transito | recibida_parcial | recibida_total | anulada
+  condicionesPago             String    @map("condiciones_pago")
+  fechaEmision                DateTime? @map("fecha_emision")
+  fechaEntregaPrometida       DateTime? @map("fecha_entrega_prometida")
+  fechaEntregaReal            DateTime? @map("fecha_entrega_real")
+  subtotalCentavos            BigInt    @default(0) @map("subtotal_centavos")
+  descuentoCentavos           BigInt    @default(0) @map("descuento_centavos")
+  ivaCentavos                 BigInt    @default(0) @map("iva_centavos")
+  retencionFuenteCentavos     BigInt    @default(0) @map("retencion_fuente_centavos")
+  retencionIvaCentavos        BigInt    @default(0) @map("retencion_iva_centavos")
+  retencionIcaCentavos        BigInt    @default(0) @map("retencion_ica_centavos")
+  totalCentavos               BigInt    @default(0) @map("total_centavos")
+  cufeFacturaProveedor        String?   @map("cufe_factura_proveedor")
+  pdfUrlS3                    String?   @map("pdf_url_s3")
+  enviadaAt                   DateTime? @map("enviada_at")
+  notas                       String?
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+
+  tenant                      Tenant    @relation(fields: [tenantId], references: [id])
+  proveedor                   Proveedor @relation(fields: [proveedorId], references: [id])
+  frente                      FrenteObra @relation(fields: [frenteId], references: [id])
+  generadaPor                 Usuario   @relation(fields: [generadaPorId], references: [id])
+
+  items                       OrdenCompraItem[]
+  requisicion                 Requisicion?
+  entradasBodega              BodegaEntrada[]
+  movimientosCaja             MovimientoCaja[]
+
+  @@index([estado])
+  @@index([proveedorId])
+  @@index([fechaEntregaPrometida])
+  @@map("orden_compra")
+}
+
+model OrdenCompraItem {
+  id                          String   @id @default(uuid())
+  ordenCompraId               String   @map("orden_compra_id")
+  orden                       Int      @default(0)
+  materialId                  String?  @map("material_id")
+  descripcion                 String
+  unidad                      String
+  cantidad                    Decimal  @db.Decimal(15, 3)
+  precioUnitarioCentavos      BigInt   @map("precio_unitario_centavos")
+  descuentoPct                Decimal  @default(0) @db.Decimal(5, 2) @map("descuento_pct")
+  subtotalCentavos            BigInt   @map("subtotal_centavos")
+
+  ordenCompra                 OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+  material                    Material?   @relation(fields: [materialId], references: [id])
+  entradasItem                BodegaEntradaItem[]
+
+  @@index([ordenCompraId])
+  @@map("orden_compra_item")
+}
+
+// ============================================================
+// CAJA MENOR
+// ============================================================
+
+model MovimientoCaja {
+  id                       String    @id @default(uuid())
+  tenantId                 Int       @default(1) @map("tenant_id")
+  codigo                   String    @unique
+  tipo                     String    // entrada | salida | ajuste
+  concepto                 String
+  montoCentavos            BigInt    @map("monto_centavos")
+  frenteId                 String?   @map("frente_id")
+  ordenCompraId            String?   @map("orden_compra_id")
+  proveedorId              String?   @map("proveedor_id")
+  categoria                String?
+  soporteAdjuntoId         String?   @map("soporte_adjunto_id")
+  retencionFuenteCentavos  BigInt    @default(0) @map("retencion_fuente_centavos")
+  retencionIvaCentavos     BigInt    @default(0) @map("retencion_iva_centavos")
+  retencionIcaCentavos     BigInt    @default(0) @map("retencion_ica_centavos")
+  arqueoId                 String?   @map("arqueo_id")
+  idempotencyKey           String?   @unique @map("idempotency_key")
+  autorizadoPorId          String    @map("autorizado_por_id")
+  fechaMovimiento          DateTime  @default(now()) @map("fecha_movimiento")
+  createdAt                DateTime  @default(now()) @map("created_at")
+
+  tenant                   Tenant    @relation(fields: [tenantId], references: [id])
+  frente                   FrenteObra? @relation(fields: [frenteId], references: [id])
+  ordenCompra              OrdenCompra? @relation(fields: [ordenCompraId], references: [id])
+  proveedor                Proveedor?  @relation(fields: [proveedorId], references: [id])
+  autorizadoPor            Usuario   @relation(fields: [autorizadoPorId], references: [id])
+  arqueo                   ArqueoCaja? @relation(fields: [arqueoId], references: [id])
+
+  @@index([fechaMovimiento])
+  @@index([frenteId, fechaMovimiento])
+  @@index([arqueoId])
+  @@map("movimiento_caja")
+}
+
+model ArqueoCaja {
+  id                        String    @id @default(uuid())
+  tenantId                  Int       @default(1) @map("tenant_id")
+  fecha                     DateTime
+  responsableId             String    @map("responsable_id")
+  saldoInicialCentavos      BigInt    @map("saldo_inicial_centavos")
+  saldoEsperadoCentavos     BigInt    @map("saldo_esperado_centavos")
+  saldoRealCentavos         BigInt    @map("saldo_real_centavos")
+  diferenciaCentavos        BigInt    @default(0) @map("diferencia_centavos")
+  justificacionDiferencia   String?   @map("justificacion_diferencia")
+  cerradoAt                 DateTime? @map("cerrado_at")
+  firmaUrl                  String?   @map("firma_url")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+
+  tenant                    Tenant    @relation(fields: [tenantId], references: [id])
+  responsable               Usuario   @relation(fields: [responsableId], references: [id])
+  movimientos               MovimientoCaja[]
+
+  @@unique([tenantId, fecha])
+  @@map("arqueo_caja")
+}
+
+// ============================================================
+// BODEGA E INVENTARIO
+// ============================================================
+
+model BodegaEntrada {
+  id              String   @id @default(uuid())
+  codigo          String   @unique
+  ordenCompraId   String   @map("orden_compra_id")
+  recibidoPorId   String   @map("recibido_por_id")
+  firmaUrl        String?  @map("firma_url")
+  notas           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  ordenCompra     OrdenCompra @relation(fields: [ordenCompraId], references: [id])
+  recibidoPor     Usuario     @relation(fields: [recibidoPorId], references: [id])
+  items           BodegaEntradaItem[]
+
+  @@map("bodega_entrada")
+}
+
+model BodegaEntradaItem {
+  id                String   @id @default(uuid())
+  entradaId         String   @map("entrada_id")
+  ocItemId          String   @map("oc_item_id")
+  cantidadEsperada  Decimal  @db.Decimal(15, 3) @map("cantidad_esperada")
+  cantidadRecibida  Decimal  @db.Decimal(15, 3) @map("cantidad_recibida")
+  estadoItem        String   @default("completo") @map("estado_item") // completo|parcial|danado|vencido
+  observaciones     String?
+
+  entrada           BodegaEntrada @relation(fields: [entradaId], references: [id], onDelete: Cascade)
+  ocItem            OrdenCompraItem @relation(fields: [ocItemId], references: [id])
+
+  @@map("bodega_entrada_item")
+}
+
+model BodegaSalida {
+  id              String   @id @default(uuid())
+  codigo          String   @unique
+  frenteId        String   @map("frente_id")
+  despachadoPorId String   @map("despachado_por_id")
+  requisicionRef  String?  @map("requisicion_ref")
+  firmaReceptorUrl String? @map("firma_receptor_url")
+  notas           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  frente          FrenteObra @relation(fields: [frenteId], references: [id])
+  despachadoPor   Usuario    @relation(fields: [despachadoPorId], references: [id])
+  items           BodegaSalidaItem[]
+
+  @@map("bodega_salida")
+}
+
+model BodegaSalidaItem {
+  id              String   @id @default(uuid())
+  salidaId        String   @map("salida_id")
+  materialId      String   @map("material_id")
+  cantidad        Decimal  @db.Decimal(15, 3)
+
+  salida          BodegaSalida @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+  material        Material     @relation(fields: [materialId], references: [id])
+
+  @@map("bodega_salida_item")
+}
+
+model InventarioFrente {
+  id              String   @id @default(uuid())
+  frenteId        String   @map("frente_id")
+  materialId      String   @map("material_id")
+  cantidad        Decimal  @default(0) @db.Decimal(15, 3)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  frente          FrenteObra @relation(fields: [frenteId], references: [id])
+  material        Material   @relation(fields: [materialId], references: [id])
+
+  @@unique([frenteId, materialId])
+  @@map("inventario_frente")
+}
+
+// ============================================================
+// SOPORTE
+// ============================================================
+
+model Adjunto {
+  id              String   @id @default(uuid())
+  nombre          String
+  mimeType        String   @map("mime_type")
+  tamanioBytes    Int      @map("tamanio_bytes")
+  urlS3           String   @map("url_s3")
+  checksumSha256  String?  @map("checksum_sha256")
+  entidad         String   // 'requisicion', 'movimiento_caja', etc.
+  entidadId       String   @map("entidad_id")
+  subidoPorId     String   @map("subido_por_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([entidad, entidadId])
+  @@map("adjunto")
+}
+
+model Notificacion {
+  id              String   @id @default(uuid())
+  targetUserId    String   @map("target_user_id")
+  tipo            String   // 'aprob', 'budget', 'stock', etc.
+  texto           String
+  payload         Json?
+  leidaAt         DateTime? @map("leida_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  targetUser      Usuario  @relation(fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([targetUserId, leidaAt])
+  @@map("notificacion")
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  tenantId        Int      @default(1) @map("tenant_id")
+  actorId         String?  @map("actor_id")
+  accion          String
+  entidad         String
+  entidadId       String?  @map("entidad_id")
+  cambios         Json?
+  ip              String?
+  userAgent       String?  @map("user_agent")
+  creadoAt        DateTime @default(now()) @map("creado_at")
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  actor           Usuario? @relation(fields: [actorId], references: [id])
+
+  @@index([entidad, entidadId])
+  @@index([actorId])
+  @@index([creadoAt])
+  @@map("audit_log")
+}
+
+model IdempotencyKey {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  endpoint        String
+  responseSnapshot Json?   @map("response_snapshot")
+  expiraAt        DateTime @map("expira_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([expiraAt])
+  @@map("idempotency_key")
+}
+
+model Configuracion {
+  id              String   @id @default(uuid())
+  tenantId        Int      @default(1) @map("tenant_id")
+  clave           String
+  valor           Json
+  descripcion     String?
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, clave])
+  @@map("configuracion")
+}
+
+// ============================================================
+// DOCUMENTO SOPORTE (DSNE — DIAN Colombia)
+// Para compras a proveedores no obligados a facturar electrónicamente
+// ============================================================
+
+model DocumentoSoporte {
+  id                          String   @id @default(uuid())
+  tenantId                    Int      @default(1) @map("tenant_id")
+  codigo                      String   @unique               // DS-2026-XXXX
+  cuds                        String?                         // Código Único de Documento Soporte (DIAN)
+
+  // Proveedor — puede ser uno registrado o ad-hoc (ocasional)
+  proveedorId                 String?  @map("proveedor_id")  // FK opcional al catálogo
+  esAdHoc                     Boolean  @default(false) @map("es_ad_hoc")
+
+  // Datos del proveedor (snapshot — siempre se guardan, vengan del catálogo o ad-hoc)
+  tipoDocumento               String   @map("tipo_documento")   // CC | CE | NIT | PASAPORTE
+  numeroDocumento             String   @map("numero_documento")
+  nombreProveedor             String   @map("nombre_proveedor")
+  direccion                   String?
+  ciudad                      String?
+  telefono                    String?
+  email                       String?
+
+  // Servicio prestado
+  servicioPrestado            String   @map("servicio_prestado") @db.Text
+  frenteId                    String?  @map("frente_id")
+  fechaDocumento              DateTime @map("fecha_documento")
+  formaPago                   String   @default("transferencia") @map("forma_pago") // efectivo | transferencia | cheque
+
+  // Montos (centavos, BIGINT)
+  subtotalCentavos            BigInt   @map("subtotal_centavos")
+  ivaCentavos                 BigInt   @default(0) @map("iva_centavos")
+  retencionFuenteCentavos     BigInt   @default(0) @map("retencion_fuente_centavos")
+  retencionIvaCentavos        BigInt   @default(0) @map("retencion_iva_centavos")
+  retencionIcaCentavos        BigInt   @default(0) @map("retencion_ica_centavos")
+  totalCentavos               BigInt   @map("total_centavos")
+
+  // Adjuntos: foto de la identificación del proveedor
+  identificacionAdjuntoId     String?  @map("identificacion_adjunto_id")
+
+  // Workflow
+  estado                      String   @default("borrador") // borrador | emitido | anulado
+  motivoAnulacion             String?  @map("motivo_anulacion")
+  creadoPorId                 String   @map("creado_por_id")
+  emitidoAt                   DateTime? @map("emitido_at")
+  anuladoAt                   DateTime? @map("anulado_at")
+
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  proveedor                   Proveedor? @relation(fields: [proveedorId], references: [id])
+  frente                      FrenteObra? @relation(fields: [frenteId], references: [id])
+  creadoPor                   Usuario     @relation(fields: [creadoPorId], references: [id])
+
+  @@index([estado])
+  @@index([numeroDocumento])
+  @@index([fechaDocumento])
+  @@map("documento_soporte")
+}
+
+model IntegracionLog {
+  id              String   @id @default(uuid())
+  sistema         String   // 'sap' | 'siigo' | 'world_office'
+  operacion       String
+  payload         Json?
+  response        Json?
+  estado          String   // 'ok' | 'error' | 'pendiente'
+  latenciaMs      Int?     @map("latencia_ms")
+  intentos        Int      @default(1)
+  errorMsg        String?  @map("error_msg")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([sistema, estado])
+  @@map("integracion_log")
+}

@@ -1,0 +1,181 @@
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import type { GenerarOCInput } from '@control-obra/shared';
+import { RequisicionesService } from '../requisiciones/requisiciones.service';
+
+const IVA = 0.19;
+
+@Injectable()
+export class OrdenesCompraService {
+  constructor(
+    private prisma: PrismaService,
+    private requisiciones: RequisicionesService,
+  ) {}
+
+  async list(params: { page: number; pageSize: number; estado?: string }) {
+    const { page, pageSize, estado } = params;
+    const where: any = {};
+    if (estado) where.estado = estado;
+
+    const [total, data] = await Promise.all([
+      this.prisma.ordenCompra.count({ where }),
+      this.prisma.ordenCompra.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          proveedor: { select: { id: true, razonSocial: true, nit: true } },
+          frente: { select: { id: true, codigo: true, nombre: true } },
+          _count: { select: { items: true } },
+        },
+      }),
+    ]);
+    return { data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+  }
+
+  async getById(id: string) {
+    const oc = await this.prisma.ordenCompra.findUnique({
+      where: { id },
+      include: {
+        proveedor: true,
+        frente: true,
+        generadaPor: { select: { id: true, nombres: true, apellidos: true, iniciales: true } },
+        items: { include: { material: true }, orderBy: { orden: 'asc' } },
+        requisicion: { select: { id: true, codigo: true, descripcion: true } },
+      },
+    });
+    if (!oc) throw new NotFoundException();
+    return oc;
+  }
+
+  async generar(input: GenerarOCInput, user: AuthUser) {
+    const req = await this.prisma.requisicion.findUnique({
+      where: { id: input.requisicionId },
+      select: { id: true, estado: true, frenteId: true, ordenCompraId: true, codigo: true },
+    });
+    if (!req) throw new NotFoundException('Requisición no encontrada');
+    if (req.estado !== 'aprobada') {
+      throw new ConflictException(
+        `Solo se puede generar OC de requisiciones aprobadas. Estado actual: ${req.estado}`,
+      );
+    }
+    if (req.ordenCompraId) {
+      throw new ConflictException(`Esta requisición ya tiene una OC asociada.`);
+    }
+
+    const proveedor = await this.prisma.proveedor.findUnique({ where: { id: input.proveedorId } });
+    if (!proveedor) throw new NotFoundException('Proveedor no encontrado');
+
+    const itemsData = input.items.map((it, idx) => {
+      const sinDesc = BigInt(Math.round(it.cantidad * Number(it.precioUnitarioCentavos)));
+      const subtotal = (sinDesc * BigInt(100 - Math.round(it.descuentoPct * 100))) / 100n;
+      return {
+        orden: idx,
+        materialId: it.materialId,
+        descripcion: it.descripcion,
+        unidad: it.unidad,
+        cantidad: it.cantidad,
+        precioUnitarioCentavos: it.precioUnitarioCentavos,
+        descuentoPct: it.descuentoPct,
+        subtotalCentavos: subtotal,
+      };
+    });
+
+    const subtotal = itemsData.reduce((s, x) => s + x.subtotalCentavos, 0n);
+    const iva = BigInt(Math.round(Number(subtotal) * IVA));
+
+    // Retenciones según régimen del proveedor (simplificado para v1)
+    const reteFuente = proveedor.regimenIva === 'responsable_iva'
+      ? BigInt(Math.round(Number(subtotal) * 0.025))
+      : 0n;
+    const reteIva = proveedor.regimenIva === 'responsable_iva' && !proveedor.granContribuyente
+      ? BigInt(Math.round(Number(iva) * 0.15))
+      : 0n;
+    const reteIca = BigInt(Math.round(Number(subtotal) * 0.00966));
+
+    const total = subtotal + iva - reteFuente - reteIva - reteIca;
+    const codigo = await this.generarCodigo();
+
+    return this.prisma.$transaction(async (tx) => {
+      const oc = await tx.ordenCompra.create({
+        data: {
+          codigo,
+          proveedorId: input.proveedorId,
+          frenteId: req.frenteId,
+          generadaPorId: user.id,
+          estado: 'borrador',
+          condicionesPago: input.condicionesPago,
+          fechaEmision: new Date(),
+          fechaEntregaPrometida: input.fechaEntregaPrometida,
+          subtotalCentavos: subtotal,
+          ivaCentavos: iva,
+          retencionFuenteCentavos: reteFuente,
+          retencionIvaCentavos: reteIva,
+          retencionIcaCentavos: reteIca,
+          totalCentavos: total,
+          notas: input.notas,
+          items: { create: itemsData },
+        },
+        include: { items: true },
+      });
+
+      // Vincular OC a la requisición y cambiar estado de la req a 'compras'
+      await tx.requisicion.update({
+        where: { id: req.id },
+        data: { ordenCompraId: oc.id, estado: 'compras' },
+      });
+
+      await tx.requisicionEstadoHistorial.create({
+        data: {
+          requisicionId: req.id,
+          estadoAnterior: 'aprobada',
+          estadoNuevo: 'compras',
+          actorId: user.id,
+          observacion: `OC ${oc.codigo} generada`,
+        },
+      });
+
+      return oc;
+    });
+  }
+
+  async enviar(id: string) {
+    const oc = await this.getById(id);
+    if (oc.estado !== 'borrador') {
+      throw new ConflictException(`Solo se puede enviar una OC en estado borrador. Actual: ${oc.estado}`);
+    }
+    return this.prisma.ordenCompra.update({
+      where: { id },
+      data: { estado: 'enviada', enviadaAt: new Date() },
+    });
+  }
+
+  async anular(id: string, motivo: string) {
+    const oc = await this.getById(id);
+    if (['recibida_total', 'anulada'].includes(oc.estado)) {
+      throw new ConflictException(`No se puede anular una OC en estado ${oc.estado}`);
+    }
+    return this.prisma.ordenCompra.update({
+      where: { id },
+      data: { estado: 'anulada', notas: `[ANULADA] ${motivo}\n\n${oc.notas || ''}` },
+    });
+  }
+
+  private async generarCodigo() {
+    const year = new Date().getFullYear();
+    const prefix = `OC-${year}-`;
+    const last = await this.prisma.ordenCompra.findFirst({
+      where: { codigo: { startsWith: prefix } },
+      orderBy: { codigo: 'desc' },
+      select: { codigo: true },
+    });
+    const lastNum = last ? parseInt(last.codigo.split('-')[2], 10) : 0;
+    return `${prefix}${(lastNum + 1).toString().padStart(4, '0')}`;
+  }
+}

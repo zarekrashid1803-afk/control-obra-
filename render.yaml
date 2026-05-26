@@ -1,0 +1,43 @@
+# ============================================================
+# Render Blueprint para auto-deploy del backend NestJS
+# Render lee este archivo y configura el servicio automáticamente.
+# ============================================================
+
+services:
+  - type: web
+    name: control-obra-api
+    runtime: docker
+    plan: free
+    region: oregon          # US-West, latencia ~80ms a Colombia
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "10000"      # Render obliga puerto 10000 en plan free
+      - key: API_PREFIX
+        value: /api/v1
+      - key: LOG_LEVEL
+        value: info
+      - key: LOG_PRETTY
+        value: "false"
+      - key: DEFAULT_TENANT_ID
+        value: "1"
+      - key: IVA_RATE
+        value: "0.19"
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 30d
+      # ↓↓↓ Las siguientes 4 se configuran manualmente en el dashboard ↓↓↓
+      - key: DATABASE_URL
+        sync: false          # No se commitea — la configuras en Render dashboard
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true  # Render lo genera aleatoriamente
+      - key: CORS_ORIGINS
+        sync: false          # Se configura después de saber URL de Vercel
