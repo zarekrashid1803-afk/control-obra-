@@ -60,4 +60,6 @@ RUN mkdir -p /app/uploads
 EXPOSE 3001
 
 # Render/Railway pasan el puerto via env. Si no, default 3001.
-CMD ["sh", "-c", "node dist/main.js"]
+# `prisma migrate deploy` aplica migraciones pendientes antes de arrancar.
+# Si no hay migraciones nuevas, no hace nada. Es idempotente y seguro.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
