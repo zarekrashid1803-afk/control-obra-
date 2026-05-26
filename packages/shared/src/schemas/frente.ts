@@ -4,6 +4,17 @@ import { idSchema, moneyCentavosSchema } from './common';
 export const estadoFrenteSchema = z.enum(['activo', 'pausado', 'cerrado']);
 export type EstadoFrente = z.infer<typeof estadoFrenteSchema>;
 
+export const tipoObraSchema = z.enum([
+  'construccion_nueva',
+  'remodelacion',
+  'ampliacion',
+  'mantenimiento',
+  'obra_civil',
+  'acabados',
+  'otro',
+]);
+export type TipoObra = z.infer<typeof tipoObraSchema>;
+
 // FR-001, FR-002, etc. (mínimo 3 dígitos)
 const frenteCodigoSchema = z.string().regex(/^FR-\d{3,5}$/, {
   message: 'Formato esperado: FR-NNN (ej. FR-001)',
@@ -18,6 +29,9 @@ export const createFrenteSchema = z.object({
   fechaInicio: z.coerce.date().optional(),
   fechaFinEstimada: z.coerce.date().optional(),
   ubicacion: z.string().optional(),
+  latitud: z.number().min(-90).max(90).optional(),
+  longitud: z.number().min(-180).max(180).optional(),
+  tipoObra: tipoObraSchema.optional(),
   responsableId: idSchema.optional(),
 });
 export type CreateFrenteInput = z.infer<typeof createFrenteSchema>;

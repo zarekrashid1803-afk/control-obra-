@@ -137,6 +137,9 @@ model FrenteObra {
   fechaInicio              DateTime? @map("fecha_inicio")
   fechaFinEstimada         DateTime? @map("fecha_fin_estimada")
   ubicacion                String?
+  latitud                  Float?
+  longitud                 Float?
+  tipoObra                 String?   @map("tipo_obra") // construccion_nueva | remodelacion | ampliacion | mantenimiento | obra_civil | acabados | otro
   responsableId            String?   @map("responsable_id")
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")

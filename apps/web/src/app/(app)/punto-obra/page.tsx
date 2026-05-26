@@ -21,17 +21,25 @@ export default function PuntoObraPage() {
 
   return (
     <div className="max-w-[1440px] mx-auto p-4 md:p-8">
-      <div className="mb-4 md:mb-5">
-        <div className="text-[11px] text-gray-500 hidden md:flex gap-1.5 mb-1.5">
-          <Link href="/dashboard" className="text-navy-700 hover:underline">Inicio</Link>
-          <span>›</span><span>Punto de obra</span>
+      <div className="mb-4 md:mb-5 flex justify-between items-end gap-3 flex-wrap">
+        <div>
+          <div className="text-[11px] text-gray-500 hidden md:flex gap-1.5 mb-1.5">
+            <Link href="/dashboard" className="text-navy-700 hover:underline">Inicio</Link>
+            <span>›</span><span>Punto de obra</span>
+          </div>
+          <h1 className="text-[20px] md:text-[22px] font-bold text-navy-900 tracking-tight">
+            Punto de obra
+          </h1>
+          <p className="text-[12.5px] md:text-[13px] text-gray-500 mt-1">
+            Estado operacional de cada obra activa · presupuesto, actividad y alertas
+          </p>
         </div>
-        <h1 className="text-[20px] md:text-[22px] font-bold text-navy-900 tracking-tight">
-          Punto de obra
-        </h1>
-        <p className="text-[12.5px] md:text-[13px] text-gray-500 mt-1">
-          Estado operacional de cada obra activa · presupuesto, actividad y alertas
-        </p>
+        <Link
+          href="/admin/frentes?new=1&returnTo=/punto-obra"
+          className="btn btn-primary"
+        >
+          + Nuevo punto de obra
+        </Link>
       </div>
 
       {frentesQ.isLoading && <div className="card p-8 text-center text-gray-500">Cargando puntos de obra…</div>}
@@ -58,6 +66,11 @@ export default function PuntoObraPage() {
                   <div>
                     <div className="font-mono text-[12px] opacity-80">{f.codigo}</div>
                     <div className="text-[16px] font-semibold leading-tight">{f.nombre}</div>
+                    {f.tipoObra && (
+                      <div className="text-[10px] uppercase tracking-wider opacity-75 mt-0.5">
+                        {f.tipoObra.replace(/_/g, ' ')}
+                      </div>
+                    )}
                     {f.ubicacion && <div className="text-[11px] opacity-75 mt-1">📍 {f.ubicacion}</div>}
                   </div>
                   <span className={`badge ${estado === 'activo' ? 'badge-aprobada' : estado === 'pausado' ? 'badge-pendiente' : 'badge-borrador'}`} style={{ background: 'rgba(255,255,255,0.15)', color: 'white' }}>

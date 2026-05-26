@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { frentes, ApiError } from '@/lib/api';
+import { frentes, usuarios, ApiError } from '@/lib/api';
 import { Drawer } from '@/components/drawer';
 import { fmtCOP } from '@/lib/utils';
 
@@ -13,6 +13,10 @@ type FrenteForm = {
   colorHex: string;
   estado: 'activo' | 'pausado' | 'cerrado';
   ubicacion: string;
+  latitud: string;
+  longitud: string;
+  tipoObra: string;
+  responsableId: string;
   fechaInicio: string;
   fechaFinEstimada: string;
 };
@@ -24,11 +28,34 @@ const EMPTY: FrenteForm = {
   colorHex: '#686B6C',
   estado: 'activo',
   ubicacion: '',
+  latitud: '',
+  longitud: '',
+  tipoObra: '',
+  responsableId: '',
   fechaInicio: '',
   fechaFinEstimada: '',
 };
 
 const COLORS = ['#000000', '#686B6C', '#AEBFCA', '#dc2626', '#059669', '#7c3aed', '#0891b2'];
+
+const TIPOS_OBRA: { value: string; label: string }[] = [
+  { value: 'construccion_nueva', label: 'Construcción nueva' },
+  { value: 'remodelacion', label: 'Remodelación' },
+  { value: 'ampliacion', label: 'Ampliación' },
+  { value: 'mantenimiento', label: 'Mantenimiento' },
+  { value: 'obra_civil', label: 'Obra civil' },
+  { value: 'acabados', label: 'Acabados' },
+  { value: 'otro', label: 'Otro' },
+];
+
+function sugerirCodigoFrente(frentesExistentes: any[]): string {
+  const numeros = frentesExistentes
+    .map((f) => /^FR-(\d+)$/.exec(f.codigo)?.[1])
+    .filter(Boolean)
+    .map(Number);
+  const max = numeros.length > 0 ? Math.max(...numeros) : 0;
+  return `FR-${String(max + 1).padStart(3, '0')}`;
+}
 
 function FrentesInner() {
   const router = useRouter();
@@ -39,10 +66,12 @@ function FrentesInner() {
   const drawerOpen = !!editId || isNew;
 
   const listQ = useQuery({ queryKey: ['frentes'], queryFn: () => frentes.list() });
+  const usuariosQ = useQuery({ queryKey: ['usuarios'], queryFn: () => usuarios.list() });
   const editingFrente = listQ.data?.find((f: any) => f.id === editId);
 
   const [form, setForm] = useState<FrenteForm>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [gpsCargando, setGpsCargando] = useState(false);
 
   useEffect(() => {
     if (editingFrente) {
@@ -53,14 +82,42 @@ function FrentesInner() {
         colorHex: editingFrente.colorHex || '#686B6C',
         estado: editingFrente.estado,
         ubicacion: editingFrente.ubicacion || '',
+        latitud: editingFrente.latitud != null ? String(editingFrente.latitud) : '',
+        longitud: editingFrente.longitud != null ? String(editingFrente.longitud) : '',
+        tipoObra: editingFrente.tipoObra || '',
+        responsableId: editingFrente.responsableId || '',
         fechaInicio: editingFrente.fechaInicio?.slice(0, 10) || '',
         fechaFinEstimada: editingFrente.fechaFinEstimada?.slice(0, 10) || '',
       });
     } else if (isNew) {
-      setForm(EMPTY);
+      const sugerido = sugerirCodigoFrente(listQ.data || []);
+      setForm({ ...EMPTY, codigo: sugerido });
     }
     setError(null);
-  }, [editingFrente, isNew]);
+  }, [editingFrente, isNew, listQ.data]);
+
+  function capturarGPS() {
+    if (!navigator.geolocation) {
+      setError('Este navegador no soporta GPS');
+      return;
+    }
+    setGpsCargando(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((f) => ({
+          ...f,
+          latitud: pos.coords.latitude.toFixed(6),
+          longitud: pos.coords.longitude.toFixed(6),
+        }));
+        setGpsCargando(false);
+      },
+      (err) => {
+        setError(`No se pudo obtener ubicación: ${err.message}`);
+        setGpsCargando(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
 
   const save = useMutation({
     mutationFn: async () => {
@@ -71,6 +128,10 @@ function FrentesInner() {
         colorHex: form.colorHex,
         estado: form.estado,
         ubicacion: form.ubicacion || undefined,
+        latitud: form.latitud ? Number(form.latitud) : undefined,
+        longitud: form.longitud ? Number(form.longitud) : undefined,
+        tipoObra: form.tipoObra || undefined,
+        responsableId: form.responsableId || undefined,
         fechaInicio: form.fechaInicio ? new Date(form.fechaInicio).toISOString() : undefined,
         fechaFinEstimada: form.fechaFinEstimada ? new Date(form.fechaFinEstimada).toISOString() : undefined,
       };
@@ -78,7 +139,9 @@ function FrentesInner() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['frentes'] });
-      closeDrawer();
+      const returnTo = sp.get('returnTo');
+      if (returnTo) router.replace(returnTo);
+      else closeDrawer();
     },
     onError: (err) => {
       if (err instanceof ApiError) {
@@ -244,8 +307,40 @@ function FrentesInner() {
             )}
           </Field>
 
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tipo de obra">
+              <select value={form.tipoObra} onChange={(e) => setForm({ ...form, tipoObra: e.target.value })} className="input">
+                <option value="">— Seleccionar —</option>
+                {TIPOS_OBRA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Responsable de obra">
+              <select value={form.responsableId} onChange={(e) => setForm({ ...form, responsableId: e.target.value })} className="input">
+                <option value="">— Sin asignar —</option>
+                {(usuariosQ.data || []).map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.nombres} {u.apellidos}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
           <Field label="Ubicación">
             <input value={form.ubicacion} onChange={(e) => setForm({ ...form, ubicacion: e.target.value })} className="input" placeholder="Cra 100 #15-20, Cali" />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={capturarGPS}
+                disabled={gpsCargando}
+                className="btn btn-secondary btn-sm"
+              >
+                {gpsCargando ? '📡 Capturando…' : '📍 Usar mi ubicación actual'}
+              </button>
+              {form.latitud && form.longitud && (
+                <span className="text-[11px] text-gray-500 font-mono">
+                  {Number(form.latitud).toFixed(4)}, {Number(form.longitud).toFixed(4)}
+                </span>
+              )}
+            </div>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
