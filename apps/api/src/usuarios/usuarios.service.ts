@@ -7,10 +7,11 @@ import type { CreateUsuarioInput, UpdateUsuarioInput } from '@control-obra/share
 export class UsuariosService {
   constructor(private prisma: PrismaService, private auth: AuthService) {}
 
-  async list(params: { page: number; pageSize: number; search?: string }) {
+  async list(params: { page: number; pageSize: number; search?: string }, tenantId: number) {
     const { page, pageSize, search } = params;
     const where = {
       deletedAt: null,
+      tenantId,
       ...(search
         ? {
             OR: [
@@ -37,16 +38,17 @@ export class UsuariosService {
     };
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId: number) {
     const u = await this.prisma.usuario.findUnique({
       where: { id },
       include: { roles: true },
     });
-    if (!u || u.deletedAt) throw new NotFoundException('Usuario no encontrado');
+    if (!u || u.deletedAt || u.tenantId !== tenantId) throw new NotFoundException('Usuario no encontrado');
     return this.toPublic(u);
   }
 
-  async create(input: CreateUsuarioInput) {
+  async create(input: CreateUsuarioInput, tenantId: number) {
+    // El email es único GLOBAL (el login es por email entre todos los tenants)
     const exists = await this.prisma.usuario.findUnique({ where: { email: input.email } });
     if (exists) throw new ConflictException('Email ya registrado');
 
@@ -55,6 +57,7 @@ export class UsuariosService {
 
     const u = await this.prisma.usuario.create({
       data: {
+        tenantId,
         email: input.email,
         nombres: input.nombres,
         apellidos: input.apellidos,
@@ -69,9 +72,9 @@ export class UsuariosService {
     return this.toPublic(u);
   }
 
-  async update(id: string, input: UpdateUsuarioInput) {
+  async update(id: string, input: UpdateUsuarioInput, tenantId: number) {
     const exists = await this.prisma.usuario.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException();
+    if (!exists || exists.tenantId !== tenantId) throw new NotFoundException();
     const { roles, ...rest } = input;
     const u = await this.prisma.usuario.update({
       where: { id },
@@ -91,7 +94,8 @@ export class UsuariosService {
     return this.toPublic(u);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, tenantId: number) {
+    await this.getById(id, tenantId); // valida pertenencia al tenant
     await this.prisma.usuario.update({
       where: { id },
       data: { deletedAt: new Date(), activo: false },

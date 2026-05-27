@@ -21,14 +21,14 @@ export class OrdenesCompraService {
     private email: EmailService,
   ) {}
 
-  async generarPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
-    const oc = await this.getById(id);
+  async generarPdf(id: string, tenantId: number): Promise<{ buffer: Buffer; filename: string }> {
+    const oc = await this.getById(id, tenantId);
     const buffer = await generarOCPdf(oc);
     return { buffer, filename: `${oc.codigo || 'OC'}.pdf` };
   }
 
-  async enviarConEmail(id: string) {
-    const oc = await this.getById(id);
+  async enviarConEmail(id: string, tenantId: number) {
+    const oc = await this.getById(id, tenantId);
     if (oc.estado !== 'borrador') {
       throw new ConflictException(`Solo se puede enviar una OC en estado borrador. Actual: ${oc.estado}`);
     }
@@ -80,9 +80,9 @@ export class OrdenesCompraService {
     });
   }
 
-  async list(params: { page: number; pageSize: number; estado?: string }) {
+  async list(params: { page: number; pageSize: number; estado?: string }, tenantId: number) {
     const { page, pageSize, estado } = params;
-    const where: any = {};
+    const where: any = { tenantId };
     if (estado) where.estado = estado;
 
     const [total, data] = await Promise.all([
@@ -102,7 +102,7 @@ export class OrdenesCompraService {
     return { data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId?: number) {
     const oc = await this.prisma.ordenCompra.findUnique({
       where: { id },
       include: {
@@ -114,15 +114,16 @@ export class OrdenesCompraService {
       },
     });
     if (!oc) throw new NotFoundException();
+    if (tenantId !== undefined && oc.tenantId !== tenantId) throw new NotFoundException();
     return oc;
   }
 
   async generar(input: GenerarOCInput, user: AuthUser) {
     const req = await this.prisma.requisicion.findUnique({
       where: { id: input.requisicionId },
-      select: { id: true, estado: true, frenteId: true, ordenCompraId: true, codigo: true },
+      select: { id: true, estado: true, frenteId: true, ordenCompraId: true, codigo: true, tenantId: true },
     });
-    if (!req) throw new NotFoundException('Requisición no encontrada');
+    if (!req || req.tenantId !== user.tenantId) throw new NotFoundException('Requisición no encontrada');
     if (req.estado !== 'aprobada') {
       throw new ConflictException(
         `Solo se puede generar OC de requisiciones aprobadas. Estado actual: ${req.estado}`,
@@ -133,7 +134,7 @@ export class OrdenesCompraService {
     }
 
     const proveedor = await this.prisma.proveedor.findUnique({ where: { id: input.proveedorId } });
-    if (!proveedor) throw new NotFoundException('Proveedor no encontrado');
+    if (!proveedor || proveedor.tenantId !== user.tenantId) throw new NotFoundException('Proveedor no encontrado');
 
     const itemsData = input.items.map((it, idx) => {
       const sinDesc = BigInt(Math.round(it.cantidad * Number(it.precioUnitarioCentavos)));
@@ -163,12 +164,13 @@ export class OrdenesCompraService {
     const reteIca = BigInt(Math.round(Number(subtotal) * 0.00966));
 
     const total = subtotal + iva - reteFuente - reteIva - reteIca;
-    const codigo = await this.generarCodigo();
+    const codigo = await this.generarCodigo(user.tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const oc = await tx.ordenCompra.create({
         data: {
           codigo,
+          tenantId: user.tenantId,
           proveedorId: input.proveedorId,
           frenteId: req.frenteId,
           generadaPorId: user.id,
@@ -208,8 +210,8 @@ export class OrdenesCompraService {
     });
   }
 
-  async enviar(id: string) {
-    const oc = await this.getById(id);
+  async enviar(id: string, tenantId: number) {
+    const oc = await this.getById(id, tenantId);
     if (oc.estado !== 'borrador') {
       throw new ConflictException(`Solo se puede enviar una OC en estado borrador. Actual: ${oc.estado}`);
     }
@@ -219,8 +221,8 @@ export class OrdenesCompraService {
     });
   }
 
-  async anular(id: string, motivo: string) {
-    const oc = await this.getById(id);
+  async anular(id: string, motivo: string, tenantId: number) {
+    const oc = await this.getById(id, tenantId);
     if (['recibida_total', 'anulada'].includes(oc.estado)) {
       throw new ConflictException(`No se puede anular una OC en estado ${oc.estado}`);
     }
@@ -230,11 +232,11 @@ export class OrdenesCompraService {
     });
   }
 
-  private async generarCodigo() {
+  private async generarCodigo(tenantId: number) {
     const year = new Date().getFullYear();
     const prefix = `OC-${year}-`;
     const last = await this.prisma.ordenCompra.findFirst({
-      where: { codigo: { startsWith: prefix } },
+      where: { codigo: { startsWith: prefix }, tenantId },
       orderBy: { codigo: 'desc' },
       select: { codigo: true },
     });

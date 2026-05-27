@@ -23,6 +23,7 @@ export class AuditInterceptor implements NestInterceptor {
         try {
           await this.prisma.auditLog.create({
             data: {
+              tenantId: req.user.tenantId,
               actorId: req.user.id,
               accion: `${req.method} ${req.route?.path || req.url}`,
               entidad,

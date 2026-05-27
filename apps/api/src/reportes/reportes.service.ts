@@ -17,9 +17,9 @@ export class ReportesService {
   // ============================================================
   // REPORTE 1: Consumo presupuestal por frente
   // ============================================================
-  async consumoPresupuestal(generadoPor: string): Promise<Buffer> {
+  async consumoPresupuestal(generadoPor: string, tenantId: number): Promise<Buffer> {
     const frentes = await this.prisma.frenteObra.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, tenantId },
       orderBy: { codigo: 'asc' },
       include: {
         responsable: { select: { nombres: true, apellidos: true } },
@@ -90,8 +90,8 @@ export class ReportesService {
   // ============================================================
   // REPORTE 2: Requisiciones del período
   // ============================================================
-  async requisiciones(rango: FechaRango, generadoPor: string, frenteId?: string): Promise<Buffer> {
-    const where: any = { deletedAt: null };
+  async requisiciones(rango: FechaRango, generadoPor: string, tenantId: number, frenteId?: string): Promise<Buffer> {
+    const where: any = { deletedAt: null, tenantId };
     if (rango.desde || rango.hasta) {
       where.fechaCreacion = {};
       if (rango.desde) where.fechaCreacion.gte = rango.desde;
@@ -191,8 +191,8 @@ export class ReportesService {
   // ============================================================
   // REPORTE 3: Órdenes de compra por proveedor
   // ============================================================
-  async ordenesCompra(rango: FechaRango, generadoPor: string): Promise<Buffer> {
-    const where: any = {};
+  async ordenesCompra(rango: FechaRango, generadoPor: string, tenantId: number): Promise<Buffer> {
+    const where: any = { tenantId };
     if (rango.desde || rango.hasta) {
       where.fechaEmision = {};
       if (rango.desde) where.fechaEmision.gte = rango.desde;
@@ -264,8 +264,8 @@ export class ReportesService {
   // ============================================================
   // REPORTE 4: Caja menor del período
   // ============================================================
-  async cajaMenor(rango: FechaRango, generadoPor: string): Promise<Buffer> {
-    const where: any = {};
+  async cajaMenor(rango: FechaRango, generadoPor: string, tenantId: number): Promise<Buffer> {
+    const where: any = { tenantId };
     if (rango.desde || rango.hasta) {
       where.fechaMovimiento = {};
       if (rango.desde) where.fechaMovimiento.gte = rango.desde;
@@ -365,8 +365,8 @@ export class ReportesService {
   // ============================================================
   // REPORTE 5: Auditoría para revisor fiscal
   // ============================================================
-  async auditoria(rango: FechaRango, generadoPor: string): Promise<Buffer> {
-    const where: any = {};
+  async auditoria(rango: FechaRango, generadoPor: string, tenantId: number): Promise<Buffer> {
+    const where: any = { tenantId };
     if (rango.desde || rango.hasta) {
       where.creadoAt = {};
       if (rango.desde) where.creadoAt.gte = rango.desde;

@@ -40,21 +40,22 @@ export class UsuariosController {
   @RequireRoles('admin', 'director')
   list(
     @Query(new ZodValidationPipe(paginationQuerySchema)) q: PaginationQuery,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.usuarios.list(q);
+    return this.usuarios.list(q, user.tenantId);
   }
 
   @Get(':id')
   @RequireRoles('admin', 'director')
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usuarios.getById(id);
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.usuarios.getById(id, user.tenantId);
   }
 
   @Post()
   @RequireRoles('admin')
   @UsePipes(new ZodValidationPipe(createUsuarioSchema))
-  create(@Body() body: CreateUsuarioInput) {
-    return this.usuarios.create(body);
+  create(@Body() body: CreateUsuarioInput, @CurrentUser() user: AuthUser) {
+    return this.usuarios.create(body, user.tenantId);
   }
 
   @Patch(':id')
@@ -62,13 +63,14 @@ export class UsuariosController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateUsuarioSchema)) body: UpdateUsuarioInput,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.usuarios.update(id, body);
+    return this.usuarios.update(id, body, user.tenantId);
   }
 
   @Delete(':id')
   @RequireRoles('admin')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usuarios.softDelete(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.usuarios.softDelete(id, user.tenantId);
   }
 }

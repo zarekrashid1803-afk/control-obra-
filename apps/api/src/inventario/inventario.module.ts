@@ -1,20 +1,25 @@
 import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 class InventarioService {
   constructor(private prisma: PrismaService) {}
 
   /** Existencias por material — agregando todos los frentes + bodega central (entradas - salidas) */
-  async existencias(filter: { frenteId?: string }) {
+  async existencias(filter: { frenteId?: string }, tenantId: number) {
     const materiales = await this.prisma.material.findMany({
-      where: { deletedAt: null, activo: true },
+      where: { deletedAt: null, activo: true, tenantId },
       orderBy: { sku: 'asc' },
     });
 
+    // InventarioFrente no tiene tenantId; filtramos por frentes del tenant
     const inv = await this.prisma.inventarioFrente.findMany({
-      where: filter.frenteId ? { frenteId: filter.frenteId } : {},
+      where: {
+        frente: { tenantId },
+        ...(filter.frenteId ? { frenteId: filter.frenteId } : {}),
+      },
       include: { frente: { select: { codigo: true, nombre: true } } },
     });
 
@@ -49,8 +54,8 @@ class InventarioService {
     });
   }
 
-  async alertas() {
-    const todo = await this.existencias({});
+  async alertas(tenantId: number) {
+    const todo = await this.existencias({}, tenantId);
     return {
       bajos: todo.filter((x) => x.estado === 'bajo').length,
       agotados: todo.filter((x) => x.estado === 'agotado').length,
@@ -66,12 +71,12 @@ class InventarioController {
   constructor(private svc: InventarioService) {}
 
   @Get('existencias')
-  existencias(@Query('frenteId') frenteId?: string) {
-    return this.svc.existencias({ frenteId });
+  existencias(@CurrentUser() user: AuthUser, @Query('frenteId') frenteId?: string) {
+    return this.svc.existencias({ frenteId }, user.tenantId);
   }
 
   @Get('alertas')
-  alertas() { return this.svc.alertas(); }
+  alertas(@CurrentUser() user: AuthUser) { return this.svc.alertas(user.tenantId); }
 }
 
 @Module({ providers: [InventarioService], controllers: [InventarioController] })

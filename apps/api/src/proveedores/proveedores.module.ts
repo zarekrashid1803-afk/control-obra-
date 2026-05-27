@@ -7,13 +7,14 @@ import {
 } from '@control-obra/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequireRoles } from '../common/decorators/roles.decorator';
+import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 
 @Injectable()
 export class ProveedoresService {
   constructor(private prisma: PrismaService) {}
-  async list(p: { page: number; pageSize: number; search?: string }) {
-    const where: any = { deletedAt: null };
+  async list(p: { page: number; pageSize: number; search?: string }, tenantId: number) {
+    const where: any = { deletedAt: null, tenantId };
     if (p.search) where.OR = [
       { razonSocial: { contains: p.search, mode: 'insensitive' } },
       { nit: { contains: p.search } },
@@ -25,17 +26,20 @@ export class ProveedoresService {
     ]);
     return { data, pagination: { page: p.page, pageSize: p.pageSize, total, totalPages: Math.ceil(total / p.pageSize) } };
   }
-  async getById(id: string) {
+  async getById(id: string, tenantId: number) {
     const v = await this.prisma.proveedor.findUnique({ where: { id } });
-    if (!v || v.deletedAt) throw new NotFoundException();
+    if (!v || v.deletedAt || v.tenantId !== tenantId) throw new NotFoundException();
     return v;
   }
-  create(input: CreateProveedorInput) { return this.prisma.proveedor.create({ data: input }); }
-  async update(id: string, input: UpdateProveedorInput) {
-    await this.getById(id);
+  create(input: CreateProveedorInput, tenantId: number) {
+    return this.prisma.proveedor.create({ data: { ...input, tenantId } });
+  }
+  async update(id: string, input: UpdateProveedorInput, tenantId: number) {
+    await this.getById(id, tenantId);
     return this.prisma.proveedor.update({ where: { id }, data: input });
   }
-  async softDelete(id: string) {
+  async softDelete(id: string, tenantId: number) {
+    await this.getById(id, tenantId);
     await this.prisma.proveedor.update({ where: { id }, data: { deletedAt: new Date(), activo: false } });
     return { ok: true };
   }
@@ -47,19 +51,19 @@ export class ProveedoresService {
 class ProveedoresController {
   constructor(private svc: ProveedoresService) {}
 
-  @Get() list(@Query(new ZodValidationPipe(paginationQuerySchema)) q: PaginationQuery) { return this.svc.list(q); }
-  @Get(':id') get(@Param('id', ParseUUIDPipe) id: string) { return this.svc.getById(id); }
+  @Get() list(@Query(new ZodValidationPipe(paginationQuerySchema)) q: PaginationQuery, @CurrentUser() user: AuthUser) { return this.svc.list(q, user.tenantId); }
+  @Get(':id') get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) { return this.svc.getById(id, user.tenantId); }
 
   @Post() @RequireRoles('admin', 'compras')
-  create(@Body(new ZodValidationPipe(createProveedorSchema)) body: CreateProveedorInput) { return this.svc.create(body); }
+  create(@Body(new ZodValidationPipe(createProveedorSchema)) body: CreateProveedorInput, @CurrentUser() user: AuthUser) { return this.svc.create(body, user.tenantId); }
 
   @Patch(':id') @RequireRoles('admin', 'compras')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(updateProveedorSchema)) body: UpdateProveedorInput) {
-    return this.svc.update(id, body);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(updateProveedorSchema)) body: UpdateProveedorInput, @CurrentUser() user: AuthUser) {
+    return this.svc.update(id, body, user.tenantId);
   }
 
   @Delete(':id') @RequireRoles('admin')
-  remove(@Param('id', ParseUUIDPipe) id: string) { return this.svc.softDelete(id); }
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) { return this.svc.softDelete(id, user.tenantId); }
 }
 
 @Module({

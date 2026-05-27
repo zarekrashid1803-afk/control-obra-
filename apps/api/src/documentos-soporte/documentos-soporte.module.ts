@@ -17,8 +17,8 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe';
 class DocumentosSoporteService {
   constructor(private prisma: PrismaService) {}
 
-  async list(filter: DocSoporteFilter, pag: { page: number; pageSize: number; search?: string }) {
-    const where: any = { deletedAt: null };
+  async list(filter: DocSoporteFilter, pag: { page: number; pageSize: number; search?: string }, tenantId: number) {
+    const where: any = { deletedAt: null, tenantId };
     if (filter.estado) where.estado = filter.estado;
     if (filter.proveedorId) where.proveedorId = filter.proveedorId;
     if (filter.frenteId) where.frenteId = filter.frenteId;
@@ -51,7 +51,7 @@ class DocumentosSoporteService {
     return { data, pagination: { page: pag.page, pageSize: pag.pageSize, total, totalPages: Math.ceil(total / pag.pageSize) } };
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId?: number) {
     const d = await this.prisma.documentoSoporte.findUnique({
       where: { id },
       include: {
@@ -61,6 +61,7 @@ class DocumentosSoporteService {
       },
     });
     if (!d || d.deletedAt) throw new NotFoundException('Documento soporte no encontrado');
+    if (tenantId !== undefined && d.tenantId !== tenantId) throw new NotFoundException('Documento soporte no encontrado');
     // Si tiene adjunto, traerlo aparte
     let identificacionAdjunto: any = null;
     if (d.identificacionAdjuntoId) {
@@ -102,11 +103,12 @@ class DocumentosSoporteService {
     const ric = BigInt((input.retencionIcaCentavos || 0n) as any);
     const total = subtotal + iva - rfu - riv - ric;
 
-    const codigo = await this.generarCodigo();
+    const codigo = await this.generarCodigo(user.tenantId);
 
     return this.prisma.documentoSoporte.create({
       data: {
         codigo,
+        tenantId: user.tenantId,
         proveedorId: input.proveedorId || null,
         esAdHoc: input.esAdHoc,
         ...snapshot,
@@ -129,18 +131,18 @@ class DocumentosSoporteService {
     });
   }
 
-  async update(id: string, input: UpdateDocumentoSoporteInput) {
+  async update(id: string, input: UpdateDocumentoSoporteInput, tenantId: number) {
     const exists = await this.prisma.documentoSoporte.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException();
+    if (!exists || exists.tenantId !== tenantId) throw new NotFoundException();
     if (exists.estado !== 'borrador') {
       throw new ConflictException(`No se puede modificar un documento en estado ${exists.estado}`);
     }
     return this.prisma.documentoSoporte.update({ where: { id }, data: input as any });
   }
 
-  async emitir(id: string) {
+  async emitir(id: string, tenantId: number) {
     const exists = await this.prisma.documentoSoporte.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException();
+    if (!exists || exists.tenantId !== tenantId) throw new NotFoundException();
     if (exists.estado !== 'borrador') throw new ConflictException(`Solo se emiten borradores. Estado actual: ${exists.estado}`);
     // Generar CUDS placeholder (en producción → integración DIAN)
     const cuds = `CUDS-${Date.now().toString(36).toUpperCase()}`;
@@ -150,9 +152,9 @@ class DocumentosSoporteService {
     });
   }
 
-  async anular(id: string, motivo: string) {
+  async anular(id: string, motivo: string, tenantId: number) {
     const exists = await this.prisma.documentoSoporte.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException();
+    if (!exists || exists.tenantId !== tenantId) throw new NotFoundException();
     if (exists.estado === 'anulado') throw new ConflictException('Ya está anulado');
     return this.prisma.documentoSoporte.update({
       where: { id },
@@ -160,11 +162,11 @@ class DocumentosSoporteService {
     });
   }
 
-  private async generarCodigo() {
+  private async generarCodigo(tenantId: number) {
     const year = new Date().getFullYear();
     const prefix = `DS-${year}-`;
     const last = await this.prisma.documentoSoporte.findFirst({
-      where: { codigo: { startsWith: prefix } },
+      where: { codigo: { startsWith: prefix }, tenantId },
       orderBy: { codigo: 'desc' },
     });
     const lastNum = last ? parseInt(last.codigo.split('-')[2], 10) : 0;
@@ -182,12 +184,13 @@ class DocumentosSoporteController {
   list(
     @Query(new ZodValidationPipe(docSoporteFilterSchema)) filter: DocSoporteFilter,
     @Query(new ZodValidationPipe(paginationQuerySchema)) pag: PaginationQuery,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.svc.list(filter, pag);
+    return this.svc.list(filter, pag, user.tenantId);
   }
 
   @Get(':id')
-  get(@Param('id', ParseUUIDPipe) id: string) { return this.svc.getById(id); }
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) { return this.svc.getById(id, user.tenantId); }
 
   @Post()
   @RequireRoles('admin', 'compras', 'caja', 'director')
@@ -204,18 +207,19 @@ class DocumentosSoporteController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateDocumentoSoporteSchema)) body: UpdateDocumentoSoporteInput,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.svc.update(id, body);
+    return this.svc.update(id, body, user.tenantId);
   }
 
   @Post(':id/emitir')
   @RequireRoles('admin', 'compras', 'caja', 'director')
-  emitir(@Param('id', ParseUUIDPipe) id: string) { return this.svc.emitir(id); }
+  emitir(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) { return this.svc.emitir(id, user.tenantId); }
 
   @Post(':id/anular')
   @RequireRoles('admin', 'director')
-  anular(@Param('id', ParseUUIDPipe) id: string, @Body('motivo') motivo: string) {
-    return this.svc.anular(id, motivo || 'Sin motivo registrado');
+  anular(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Body('motivo') motivo: string) {
+    return this.svc.anular(id, motivo || 'Sin motivo registrado', user.tenantId);
   }
 }
 

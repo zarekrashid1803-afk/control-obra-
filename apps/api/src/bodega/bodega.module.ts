@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Injectable, Module, Param, ParseUUIDPipe, Post, Query,
+  Body, Controller, Get, Injectable, Module, NotFoundException, Param, ParseUUIDPipe, Post, Query,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import {
@@ -16,10 +16,13 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe';
 class BodegaService {
   constructor(private prisma: PrismaService) {}
 
-  async listEntradas(p: { page: number; pageSize: number }) {
+  async listEntradas(p: { page: number; pageSize: number }, tenantId: number) {
+    // BodegaEntrada no tiene tenantId; filtramos a través de la OC
+    const where = { ordenCompra: { tenantId } };
     const [total, data] = await Promise.all([
-      this.prisma.bodegaEntrada.count(),
+      this.prisma.bodegaEntrada.count({ where }),
       this.prisma.bodegaEntrada.findMany({
+        where,
         skip: (p.page - 1) * p.pageSize, take: p.pageSize,
         orderBy: { createdAt: 'desc' },
         include: { ordenCompra: { include: { proveedor: { select: { razonSocial: true } } } }, items: true },
@@ -29,6 +32,9 @@ class BodegaService {
   }
 
   async crearEntrada(input: CrearEntradaBodegaInput, user: AuthUser) {
+    // Validar que la OC pertenezca al tenant
+    const oc = await this.prisma.ordenCompra.findUnique({ where: { id: input.ordenCompraId }, select: { tenantId: true } });
+    if (!oc || oc.tenantId !== user.tenantId) throw new NotFoundException('Orden de compra no encontrada');
     const codigo = await this.codigo('BE');
     return this.prisma.$transaction(async (tx) => {
       // Map de cantidades esperadas según OC
@@ -75,6 +81,9 @@ class BodegaService {
   }
 
   async crearSalida(input: CrearSalidaBodegaInput, user: AuthUser) {
+    // Validar que el frente pertenezca al tenant
+    const frente = await this.prisma.frenteObra.findUnique({ where: { id: input.frenteId }, select: { tenantId: true } });
+    if (!frente || frente.tenantId !== user.tenantId) throw new NotFoundException('Frente no encontrado');
     const codigo = await this.codigo('BS');
     return this.prisma.$transaction(async (tx) => {
       const salida = await tx.bodegaSalida.create({
@@ -135,8 +144,8 @@ class BodegaController {
   constructor(private svc: BodegaService) {}
 
   @Get('entradas')
-  listEntradas(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery) {
-    return this.svc.listEntradas(p);
+  listEntradas(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery, @CurrentUser() user: AuthUser) {
+    return this.svc.listEntradas(p, user.tenantId);
   }
 
   @Post('entradas')

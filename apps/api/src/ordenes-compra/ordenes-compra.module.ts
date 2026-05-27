@@ -18,12 +18,12 @@ class OrdenesCompraController {
   constructor(private svc: OrdenesCompraService) {}
 
   @Get()
-  list(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery, @Query('estado') estado?: string) {
-    return this.svc.list({ ...p, estado });
+  list(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery, @CurrentUser() user: AuthUser, @Query('estado') estado?: string) {
+    return this.svc.list({ ...p, estado }, user.tenantId);
   }
 
   @Get(':id')
-  get(@Param('id', ParseUUIDPipe) id: string) { return this.svc.getById(id); }
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) { return this.svc.getById(id, user.tenantId); }
 
   @Post()
   @RequireRoles('compras', 'admin')
@@ -35,14 +35,14 @@ class OrdenesCompraController {
   @Post(':id/enviar')
   @RequireRoles('compras', 'admin')
   @ApiOperation({ summary: 'Marcar OC como enviada y mandar PDF al email del proveedor' })
-  async enviar(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.enviarConEmail(id);
+  async enviar(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.svc.enviarConEmail(id, user.tenantId);
   }
 
   @Get(':id/pdf')
   @ApiOperation({ summary: 'Descargar el PDF de la orden de compra' })
-  async pdf(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
-    const { buffer, filename } = await this.svc.generarPdf(id);
+  async pdf(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.generarPdf(id, user.tenantId);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buffer);
@@ -50,8 +50,8 @@ class OrdenesCompraController {
 
   @Post(':id/anular')
   @RequireRoles('compras', 'admin', 'director')
-  anular(@Param('id', ParseUUIDPipe) id: string, @Body('motivo') motivo: string) {
-    return this.svc.anular(id, motivo || 'Anulada sin motivo registrado');
+  anular(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Body('motivo') motivo: string) {
+    return this.svc.anular(id, motivo || 'Anulada sin motivo registrado', user.tenantId);
   }
 }
 

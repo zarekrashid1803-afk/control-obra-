@@ -212,8 +212,8 @@ model FrenteObra {
 model Proveedor {
   id                  String   @id @default(uuid())
   tenantId            Int      @default(1) @map("tenant_id")
-  codigo              String   @unique
-  nit                 String   @unique
+  codigo              String   // único por tenant (ver @@unique)
+  nit                 String   // único por tenant (ver @@unique)
   razonSocial         String   @map("razon_social")
   tipoPersona         String   @default("juridica") @map("tipo_persona") // juridica | natural
   regimenIva          String   @default("responsable_iva") @map("regimen_iva")
@@ -236,13 +236,16 @@ model Proveedor {
   movimientosCaja     MovimientoCaja[]
   documentosSoporte   DocumentoSoporte[]
 
+  @@unique([tenantId, codigo])
+  @@unique([tenantId, nit])
+  @@index([tenantId])
   @@map("proveedor")
 }
 
 model Material {
   id                          String   @id @default(uuid())
   tenantId                    Int      @default(1) @map("tenant_id")
-  sku                         String   @unique
+  sku                         String   // único por tenant (ver @@unique)
   descripcion                 String
   unidad                      String
   categoria                   String?
@@ -261,8 +264,9 @@ model Material {
   inventario                  InventarioFrente[]
   bodegaSalidaItems           BodegaSalidaItem[]
 
-  @@index([sku])
+  @@unique([tenantId, sku])
   @@index([activo])
+  @@index([tenantId])
   @@map("material")
 }
 
@@ -273,7 +277,7 @@ model Material {
 model Requisicion {
   id                   String    @id @default(uuid())
   tenantId             Int       @default(1) @map("tenant_id")
-  codigo               String    @unique
+  codigo               String    // único por tenant (ver @@unique)
   frenteId             String    @map("frente_id")
   solicitanteId        String    @map("solicitante_id")
   descripcion          String
@@ -306,10 +310,12 @@ model Requisicion {
   historial            RequisicionEstadoHistorial[]
   observaciones        RequisicionObservacion[]
 
+  @@unique([tenantId, codigo])
   @@index([estado])
   @@index([frenteId, estado])
   @@index([solicitanteId])
   @@index([createdAt])
+  @@index([tenantId])
   @@map("requisicion")
 }
 
@@ -369,7 +375,7 @@ model RequisicionObservacion {
 model OrdenCompra {
   id                          String    @id @default(uuid())
   tenantId                    Int       @default(1) @map("tenant_id")
-  codigo                      String    @unique
+  codigo                      String    // único por tenant (ver @@unique)
   proveedorId                 String    @map("proveedor_id")
   frenteId                    String    @map("frente_id")
   generadaPorId               String    @map("generada_por_id")
@@ -402,9 +408,11 @@ model OrdenCompra {
   entradasBodega              BodegaEntrada[]
   movimientosCaja             MovimientoCaja[]
 
+  @@unique([tenantId, codigo])
   @@index([estado])
   @@index([proveedorId])
   @@index([fechaEntregaPrometida])
+  @@index([tenantId])
   @@map("orden_compra")
 }
 
@@ -435,7 +443,7 @@ model OrdenCompraItem {
 model MovimientoCaja {
   id                       String    @id @default(uuid())
   tenantId                 Int       @default(1) @map("tenant_id")
-  codigo                   String    @unique
+  codigo                   String    // único por tenant (ver @@unique)
   tipo                     String    // entrada | salida | ajuste
   concepto                 String
   montoCentavos            BigInt    @map("monto_centavos")
@@ -460,9 +468,11 @@ model MovimientoCaja {
   autorizadoPor            Usuario   @relation(fields: [autorizadoPorId], references: [id])
   arqueo                   ArqueoCaja? @relation(fields: [arqueoId], references: [id])
 
+  @@unique([tenantId, codigo])
   @@index([fechaMovimiento])
   @@index([frenteId, fechaMovimiento])
   @@index([arqueoId])
+  @@index([tenantId])
   @@map("movimiento_caja")
 }
 
@@ -656,7 +666,7 @@ model Configuracion {
 model DocumentoSoporte {
   id                          String   @id @default(uuid())
   tenantId                    Int      @default(1) @map("tenant_id")
-  codigo                      String   @unique               // DS-2026-XXXX
+  codigo                      String   // DS-2026-XXXX, único por tenant (ver @@unique)
   cuds                        String?                         // Código Único de Documento Soporte (DIAN)
 
   // Proveedor — puede ser uno registrado o ad-hoc (ocasional)
@@ -705,8 +715,10 @@ model DocumentoSoporte {
   creadoPor                   Usuario     @relation(fields: [creadoPorId], references: [id])
 
   @@index([estado])
+  @@unique([tenantId, codigo])
   @@index([numeroDocumento])
   @@index([fechaDocumento])
+  @@index([tenantId])
   @@map("documento_soporte")
 }
 

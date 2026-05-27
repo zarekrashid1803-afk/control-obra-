@@ -17,10 +17,12 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe';
 class CajaService {
   constructor(private prisma: PrismaService) {}
 
-  async listMovimientos(p: { page: number; pageSize: number }) {
+  async listMovimientos(p: { page: number; pageSize: number }, tenantId: number) {
+    const where = { tenantId };
     const [total, data] = await Promise.all([
-      this.prisma.movimientoCaja.count(),
+      this.prisma.movimientoCaja.count({ where }),
       this.prisma.movimientoCaja.findMany({
+        where,
         skip: (p.page - 1) * p.pageSize, take: p.pageSize,
         orderBy: { fechaMovimiento: 'desc' },
         include: {
@@ -38,10 +40,11 @@ class CajaService {
       const dup = await this.prisma.movimientoCaja.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
       if (dup) return dup;
     }
-    const codigo = await this.generarCodigo();
+    const codigo = await this.generarCodigo(user.tenantId);
     const mov = await this.prisma.movimientoCaja.create({
       data: {
         codigo,
+        tenantId: user.tenantId,
         tipo: input.tipo,
         concepto: input.concepto,
         montoCentavos: input.montoCentavos,
@@ -87,7 +90,7 @@ class CajaService {
       const saldoInicial = ayerArqueo?.saldoRealCentavos ?? 0n;
 
       const movs = await tx.movimientoCaja.findMany({
-        where: { fechaMovimiento: { gte: fechaInicio, lte: fechaFin } },
+        where: { fechaMovimiento: { gte: fechaInicio, lte: fechaFin }, tenantId: user.tenantId },
       });
       const sumDia = movs.reduce(
         (s, m) => (m.tipo === 'entrada' ? s + m.montoCentavos : s - m.montoCentavos),
@@ -126,7 +129,7 @@ class CajaService {
 
       // Vincular movimientos al arqueo
       await tx.movimientoCaja.updateMany({
-        where: { fechaMovimiento: { gte: fechaInicio, lte: fechaFin } },
+        where: { fechaMovimiento: { gte: fechaInicio, lte: fechaFin }, tenantId: user.tenantId },
         data: { arqueoId: arqueo.id },
       });
 
@@ -134,16 +137,16 @@ class CajaService {
     });
   }
 
-  async getArqueoDia(fecha: Date) {
+  async getArqueoDia(fecha: Date, tenantId: number) {
     const inicio = new Date(fecha); inicio.setHours(0, 0, 0, 0);
-    return this.prisma.arqueoCaja.findFirst({ where: { fecha: inicio } });
+    return this.prisma.arqueoCaja.findFirst({ where: { fecha: inicio, tenantId } });
   }
 
-  private async generarCodigo() {
+  private async generarCodigo(tenantId: number) {
     const year = new Date().getFullYear();
     const prefix = `CM-${year}-`;
     const last = await this.prisma.movimientoCaja.findFirst({
-      where: { codigo: { startsWith: prefix } },
+      where: { codigo: { startsWith: prefix }, tenantId },
       orderBy: { codigo: 'desc' },
     });
     const lastNum = last ? parseInt(last.codigo.split('-')[2], 10) : 0;
@@ -158,8 +161,8 @@ class CajaController {
   constructor(private svc: CajaService) {}
 
   @Get('movimientos')
-  list(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery) {
-    return this.svc.listMovimientos(p);
+  list(@Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery, @CurrentUser() user: AuthUser) {
+    return this.svc.listMovimientos(p, user.tenantId);
   }
 
   @Post('movimientos')
@@ -172,8 +175,8 @@ class CajaController {
   }
 
   @Get('arqueo/:fecha')
-  getArqueo(@Param('fecha') fecha: string) {
-    return this.svc.getArqueoDia(new Date(fecha));
+  getArqueo(@Param('fecha') fecha: string, @CurrentUser() user: AuthUser) {
+    return this.svc.getArqueoDia(new Date(fecha), user.tenantId);
   }
 
   @Post('arqueo')

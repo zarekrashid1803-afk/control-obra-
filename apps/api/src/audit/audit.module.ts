@@ -4,6 +4,7 @@ import {
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequireRoles } from '../common/decorators/roles.decorator';
+import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { paginationQuerySchema, PaginationQuery } from '@control-obra/shared';
 
@@ -14,8 +15,9 @@ class AuditService {
   async list(
     p: { page: number; pageSize: number },
     f: { entidad?: string; entidadId?: string; actorId?: string },
+    tenantId: number,
   ) {
-    const where: any = {};
+    const where: any = { tenantId };
     if (f.entidad) where.entidad = f.entidad;
     if (f.entidadId) where.entidadId = f.entidadId;
     if (f.actorId) where.actorId = f.actorId;
@@ -43,11 +45,12 @@ class AuditController {
   @RequireRoles('admin', 'director', 'auditor')
   list(
     @Query(new ZodValidationPipe(paginationQuerySchema)) p: PaginationQuery,
+    @CurrentUser() user: AuthUser,
     @Query('entidad') entidad?: string,
     @Query('entidadId') entidadId?: string,
     @Query('actorId') actorId?: string,
   ) {
-    return this.svc.list(p, { entidad, entidadId, actorId });
+    return this.svc.list(p, { entidad, entidadId, actorId }, user.tenantId);
   }
 }
 

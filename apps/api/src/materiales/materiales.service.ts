@@ -6,9 +6,9 @@ import type { CreateMaterialInput, UpdateMaterialInput } from '@control-obra/sha
 export class MaterialesService {
   constructor(private prisma: PrismaService) {}
 
-  async list(params: { page: number; pageSize: number; search?: string }) {
+  async list(params: { page: number; pageSize: number; search?: string }, tenantId: number) {
     const { page, pageSize, search } = params;
-    const where: any = { deletedAt: null };
+    const where: any = { deletedAt: null, tenantId };
     if (search) {
       where.OR = [
         { sku: { contains: search, mode: 'insensitive' } },
@@ -28,22 +28,23 @@ export class MaterialesService {
     };
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId: number) {
     const m = await this.prisma.material.findUnique({ where: { id } });
-    if (!m || m.deletedAt) throw new NotFoundException();
+    if (!m || m.deletedAt || m.tenantId !== tenantId) throw new NotFoundException();
     return m;
   }
 
-  async create(input: CreateMaterialInput) {
-    return this.prisma.material.create({ data: input });
+  async create(input: CreateMaterialInput, tenantId: number) {
+    return this.prisma.material.create({ data: { ...input, tenantId } });
   }
 
-  async update(id: string, input: UpdateMaterialInput) {
-    await this.getById(id);
+  async update(id: string, input: UpdateMaterialInput, tenantId: number) {
+    await this.getById(id, tenantId);
     return this.prisma.material.update({ where: { id }, data: input });
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, tenantId: number) {
+    await this.getById(id, tenantId);
     await this.prisma.material.update({ where: { id }, data: { deletedAt: new Date(), activo: false } });
     return { ok: true };
   }

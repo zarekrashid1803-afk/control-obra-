@@ -29,8 +29,8 @@ export class RequisicionesController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Detalle de requisición con timeline' })
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.getById(id);
+  get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.svc.getById(id, user.tenantId);
   }
 
   @Post()

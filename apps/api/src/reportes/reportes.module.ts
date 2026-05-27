@@ -27,7 +27,7 @@ class ReportesController {
   @ApiOperation({ summary: 'Reporte Excel: consumo presupuestal por frente' })
   async consumoPresupuestal(@CurrentUser() user: AuthUser, @Res() res: Response) {
     const nombre = `${user.nombres} ${user.apellidos}`;
-    const buffer = await this.svc.consumoPresupuestal(nombre);
+    const buffer = await this.svc.consumoPresupuestal(nombre, user.tenantId);
     const filename = `Consumo-Presupuestal-${new Date().toISOString().slice(0, 10)}.xlsx`;
     setExcelHeaders(res, filename);
     res.send(buffer);
@@ -43,7 +43,7 @@ class ReportesController {
     @Query('frenteId') frenteId?: string,
   ) {
     const nombre = `${user.nombres} ${user.apellidos}`;
-    const buffer = await this.svc.requisiciones({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre, frenteId);
+    const buffer = await this.svc.requisiciones({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre, user.tenantId, frenteId);
     const filename = `Requisiciones-${new Date().toISOString().slice(0, 10)}.xlsx`;
     setExcelHeaders(res, filename);
     res.send(buffer);
@@ -58,7 +58,7 @@ class ReportesController {
     @Query('hasta') hasta?: string,
   ) {
     const nombre = `${user.nombres} ${user.apellidos}`;
-    const buffer = await this.svc.ordenesCompra({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre);
+    const buffer = await this.svc.ordenesCompra({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre, user.tenantId);
     const filename = `Ordenes-Compra-${new Date().toISOString().slice(0, 10)}.xlsx`;
     setExcelHeaders(res, filename);
     res.send(buffer);
@@ -73,7 +73,7 @@ class ReportesController {
     @Query('hasta') hasta?: string,
   ) {
     const nombre = `${user.nombres} ${user.apellidos}`;
-    const buffer = await this.svc.cajaMenor({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre);
+    const buffer = await this.svc.cajaMenor({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre, user.tenantId);
     const filename = `Caja-Menor-${new Date().toISOString().slice(0, 10)}.xlsx`;
     setExcelHeaders(res, filename);
     res.send(buffer);
@@ -88,7 +88,7 @@ class ReportesController {
     @Query('hasta') hasta?: string,
   ) {
     const nombre = `${user.nombres} ${user.apellidos}`;
-    const buffer = await this.svc.auditoria({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre);
+    const buffer = await this.svc.auditoria({ desde: parseFecha(desde), hasta: parseFecha(hasta) }, nombre, user.tenantId);
     const filename = `Auditoria-${new Date().toISOString().slice(0, 10)}.xlsx`;
     setExcelHeaders(res, filename);
     res.send(buffer);

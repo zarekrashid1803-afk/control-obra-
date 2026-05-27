@@ -23,7 +23,7 @@ export class RequisicionesService {
   ) {}
 
   async list(filter: RequisicionFilter, pagination: { page: number; pageSize: number; search?: string }, user: AuthUser) {
-    const where: any = { deletedAt: null };
+    const where: any = { deletedAt: null, tenantId: user.tenantId };
     if (filter.estado) where.estado = filter.estado;
     if (filter.frenteId) where.frenteId = filter.frenteId;
     if (filter.solicitanteId) where.solicitanteId = filter.solicitanteId;
@@ -74,7 +74,7 @@ export class RequisicionesService {
     };
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId?: number) {
     const r = await this.prisma.requisicion.findUnique({
       where: { id },
       include: {
@@ -89,13 +89,14 @@ export class RequisicionesService {
       },
     });
     if (!r || r.deletedAt) throw new NotFoundException();
+    if (tenantId !== undefined && r.tenantId !== tenantId) throw new NotFoundException();
     return r;
   }
 
   async create(input: CreateRequisicionInput, user: AuthUser) {
-    // Validar frente existe
+    // Validar frente existe Y pertenece al tenant del usuario
     const frente = await this.prisma.frenteObra.findUnique({ where: { id: input.frenteId } });
-    if (!frente || frente.deletedAt) throw new NotFoundException('Frente no encontrado');
+    if (!frente || frente.deletedAt || frente.tenantId !== user.tenantId) throw new NotFoundException('Frente no encontrado');
 
     // Snapshot precios y calcular subtotales
     const itemsData = input.items.map((it, idx) => {
@@ -118,12 +119,13 @@ export class RequisicionesService {
     // Verificar presupuesto
     const sobre = frente.consumidoCentavos + total > frente.presupuestoTotalCentavos;
 
-    // Generar código secuencial
-    const codigo = await this.generarCodigo();
+    // Generar código secuencial (por tenant)
+    const codigo = await this.generarCodigo(user.tenantId);
 
     const req = await this.prisma.requisicion.create({
       data: {
         codigo,
+        tenantId: user.tenantId,
         frenteId: input.frenteId,
         solicitanteId: user.id,
         descripcion: input.descripcion,
@@ -157,7 +159,7 @@ export class RequisicionesService {
         frente: { select: { nombre: true } },
       },
     });
-    if (!r) throw new NotFoundException();
+    if (!r || r.tenantId !== user.tenantId) throw new NotFoundException();
 
     const { estadoNuevo } = evaluarTransicion(input.accion as AccionRequisicion, {
       estadoActual: r.estado as any,
@@ -235,12 +237,12 @@ export class RequisicionesService {
     return updated;
   }
 
-  /** Genera código RQ-YYYY-NNNN basado en el último del año en curso */
-  private async generarCodigo(): Promise<string> {
+  /** Genera código RQ-YYYY-NNNN basado en el último del año en curso, por tenant */
+  private async generarCodigo(tenantId: number): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `RQ-${year}-`;
     const last = await this.prisma.requisicion.findFirst({
-      where: { codigo: { startsWith: prefix } },
+      where: { codigo: { startsWith: prefix }, tenantId },
       orderBy: { codigo: 'desc' },
       select: { codigo: true },
     });
