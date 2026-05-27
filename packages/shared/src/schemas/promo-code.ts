@@ -30,3 +30,9 @@ export const extenderTrialSchema = z.object({
   horasAdicionales: z.number().int().min(1).max(8760), // máx 1 año
 });
 export type ExtenderTrialInput = z.infer<typeof extenderTrialSchema>;
+
+export const updateTenantSchema = z.object({
+  nombre: z.string().min(3).optional(),
+  sectorId: z.string().nullable().optional(),
+});
+export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;

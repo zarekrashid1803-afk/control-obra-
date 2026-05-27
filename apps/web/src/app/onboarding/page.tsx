@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { frentes, promoCodes, ApiError } from '@/lib/api';
+import { frentes, promoCodes, tenant as tenantApi, type Sector, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { LogoOrion } from '@/components/logo-orion';
 
@@ -23,6 +23,10 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Sector
+  const [sectores, setSectores] = useState<Sector[]>([]);
+  const [sectorId, setSectorId] = useState<string>('');
+
   const [frente, setFrente] = useState({
     codigo: 'FR-001',
     nombre: '',
@@ -33,7 +37,24 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     promoCodes.status().then((s) => setHorasRestantes(s.horasRestantes)).catch(() => {});
+    promoCodes.sectores().then((s) => setSectores(s)).catch(() => {});
+    // Si el código traía sector preasignado, lo precargamos
+    tenantApi.me().then((t) => { if (t.sectorId) setSectorId(t.sectorId); }).catch(() => {});
   }, []);
+
+  async function guardarSector() {
+    if (!sectorId) { setStep(3); return; }
+    setError(null);
+    setSaving(true);
+    try {
+      await tenantApi.update({ sectorId });
+      setStep(3);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.body?.message || 'Error al guardar sector' : 'Error');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function crearPrimerFrente() {
     setError(null);
@@ -49,7 +70,7 @@ export default function OnboardingPage() {
         ubicacion: frente.ubicacion || undefined,
         estado: 'activo',
       });
-      setStep(3);
+      setStep(4);
     } catch (err) {
       setError(err instanceof ApiError ? err.body?.message || 'Error al crear el frente' : 'Error');
     } finally {
@@ -64,13 +85,10 @@ export default function OnboardingPage() {
           <LogoOrion className="h-10 w-auto text-navy-900" />
         </div>
 
-        {/* Progress */}
+        {/* Progress — 4 pasos */}
         <div className="flex gap-1.5 mb-5">
-          {[1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className={`flex-1 h-1 rounded ${step >= n ? 'bg-navy-900' : 'bg-gray-200'}`}
-            />
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className={`flex-1 h-1 rounded ${step >= n ? 'bg-navy-900' : 'bg-gray-200'}`} />
           ))}
         </div>
 
@@ -87,17 +105,14 @@ export default function OnboardingPage() {
         <div className="card p-7">
           {step === 1 && (
             <>
-              <h2 className="text-2xl font-bold text-navy-900 mb-2">
-                Bienvenido, {user?.nombres} 👋
-              </h2>
+              <h2 className="text-2xl font-bold text-navy-900 mb-2">Bienvenido, {user?.nombres} 👋</h2>
               <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
-                Tu cuenta quedó activa. Te guiamos por 2 pasos rápidos para que arranques
-                a usar Control de Obra hoy mismo.
+                Tu cuenta quedó activa. Te guiamos por unos pasos rápidos para que arranques hoy mismo.
               </p>
               <ul className="space-y-2 text-[13.5px] text-gray-700 mb-6">
-                <li>✓ Vamos a crear tu primer frente de obra</li>
-                <li>✓ Luego entras al dashboard con datos reales</li>
-                <li>✓ Proveedores, materiales y usuarios los configuras dentro</li>
+                <li>✓ Elegís el sector de tu empresa</li>
+                <li>✓ Creás tu primer frente de obra</li>
+                <li>✓ Entrás al dashboard con datos reales</li>
               </ul>
               <button onClick={() => setStep(2)} className="w-full py-3 bg-navy-900 text-white font-semibold rounded hover:bg-navy-800">
                 Empezar →
@@ -106,6 +121,44 @@ export default function OnboardingPage() {
           )}
 
           {step === 2 && (
+            <>
+              <h2 className="text-xl font-bold text-navy-900 mb-1">¿En qué sector trabaja tu empresa?</h2>
+              <p className="text-[13px] text-gray-500 mb-5">La app se adapta al tipo de obras u operaciones que manejas. Podés cambiarlo después.</p>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 mb-6">
+                {sectores.map((s) => {
+                  const active = sectorId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSectorId(s.id)}
+                      className={`text-left p-3.5 rounded-lg border-2 transition ${
+                        active ? 'border-navy-900 bg-gray-50' : 'border-gray-200 hover:border-navy-500'
+                      }`}
+                    >
+                      <div className="text-2xl mb-1.5">{s.iconEmoji}</div>
+                      <div className="font-semibold text-[13px] text-navy-900 leading-tight">{s.nombre}</div>
+                      {s.descripcion && <div className="text-[10.5px] text-gray-500 mt-1 leading-snug">{s.descripcion}</div>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => setStep(1)} className="btn btn-secondary">← Atrás</button>
+                <button
+                  onClick={guardarSector}
+                  disabled={saving || !sectorId}
+                  className="flex-1 py-3 bg-navy-900 text-white font-semibold rounded hover:bg-navy-800 disabled:opacity-50"
+                >
+                  {saving ? 'Guardando…' : 'Continuar →'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
             <>
               <h2 className="text-xl font-bold text-navy-900 mb-1">Tu primer frente de obra</h2>
               <p className="text-[13px] text-gray-500 mb-5">Cada frente es un centro de costos con presupuesto y responsable.</p>
@@ -141,7 +194,7 @@ export default function OnboardingPage() {
               </Field>
 
               <div className="flex gap-2 mt-6">
-                <button onClick={() => setStep(1)} className="btn btn-secondary">← Atrás</button>
+                <button onClick={() => setStep(2)} className="btn btn-secondary">← Atrás</button>
                 <button
                   onClick={crearPrimerFrente}
                   disabled={saving || !frente.nombre || !frente.presupuestoPesos}
@@ -153,20 +206,18 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {step === 3 && (
-            <>
-              <div className="text-center">
-                <div className="text-5xl mb-3">🎉</div>
-                <h2 className="text-2xl font-bold text-navy-900 mb-2">Listo</h2>
-                <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
-                  Tu frente fue creado. Ya puedes registrar requisiciones, órdenes de compra,
-                  movimientos de caja y todo lo demás desde el dashboard.
-                </p>
-                <button onClick={() => router.push('/dashboard')} className="w-full py-3 bg-navy-900 text-white font-semibold rounded hover:bg-navy-800">
-                  Ir al dashboard →
-                </button>
-              </div>
-            </>
+          {step === 4 && (
+            <div className="text-center">
+              <div className="text-5xl mb-3">🎉</div>
+              <h2 className="text-2xl font-bold text-navy-900 mb-2">Listo</h2>
+              <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
+                Tu frente fue creado. Ya puedes registrar requisiciones, órdenes de compra,
+                movimientos de caja y todo lo demás desde el dashboard.
+              </p>
+              <button onClick={() => router.push('/dashboard')} className="w-full py-3 bg-navy-900 text-white font-semibold rounded hover:bg-navy-800">
+                Ir al dashboard →
+              </button>
+            </div>
           )}
         </div>
       </div>

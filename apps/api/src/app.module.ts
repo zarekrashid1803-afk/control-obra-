@@ -21,6 +21,7 @@ import { DocumentosSoporteModule } from './documentos-soporte/documentos-soporte
 import { AdjuntosModule } from './adjuntos/adjuntos.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
+import { TenantModule } from './tenant/tenant.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -63,6 +64,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     AdjuntosModule,
     ReportesModule,
     PromoCodesModule,
+    TenantModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

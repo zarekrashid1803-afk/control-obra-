@@ -64,7 +64,7 @@ export class TrialInterceptor implements NestInterceptor {
 
     // Whitelist: logout, signup, gestión de códigos por superadmin
     const path: string = req.path || req.url || '';
-    const WHITELIST = ['/auth/logout', '/auth/change-password', '/promo-codes/'];
+    const WHITELIST = ['/auth/logout', '/auth/change-password', '/promo-codes/', '/tenant/'];
     if (WHITELIST.some((p) => path.includes(p))) return next.handle();
 
     const tenant = await this.prisma.tenant.findUnique({

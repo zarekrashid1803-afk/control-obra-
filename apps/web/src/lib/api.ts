@@ -142,6 +142,21 @@ export interface Sector {
   iconEmoji: string;
 }
 
+export interface TenantInfo {
+  id: number;
+  nombre: string;
+  nit?: string | null;
+  sectorId: string | null;
+  sector?: { id: string; nombre: string; iconEmoji: string } | null;
+  trialEndsAt: string | null;
+}
+
+export const tenant = {
+  me: () => api<TenantInfo>('/tenant/me'),
+  update: (body: { nombre?: string; sectorId?: string | null }) =>
+    api<TenantInfo>('/tenant/me', { method: 'PATCH', body: JSON.stringify(body) }),
+};
+
 export const promoCodes = {
   signup: (body: SignupPayload) =>
     api<AuthResponse & { tenant: { id: number; nombre: string; trialEndsAt: string; sectorId: string | null } }>(

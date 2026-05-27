@@ -1,14 +1,24 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { frentes, proveedores, materiales, usuarios } from '@/lib/api';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { frentes, proveedores, materiales, usuarios, tenant, promoCodes } from '@/lib/api';
 import { fmtCOP } from '@/lib/utils';
 
 export default function AdminHomePage() {
+  const qc = useQueryClient();
   const frentesQ = useQuery({ queryKey: ['frentes'], queryFn: () => frentes.list() });
   const provsQ = useQuery({ queryKey: ['proveedores'], queryFn: () => proveedores.list({ pageSize: 200 }) });
   const matsQ = useQuery({ queryKey: ['materiales'], queryFn: () => materiales.list({ pageSize: 200 }) });
   const usersQ = useQuery({ queryKey: ['usuarios'], queryFn: () => usuarios.list({ pageSize: 200 }) });
+  const tenantQ = useQuery({ queryKey: ['tenant-me'], queryFn: () => tenant.me() });
+  const sectoresQ = useQuery({ queryKey: ['sectores'], queryFn: () => promoCodes.sectores() });
+
+  const [sectorEdit, setSectorEdit] = useState<string | null>(null);
+  const cambiarSector = useMutation({
+    mutationFn: (sectorId: string) => tenant.update({ sectorId }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tenant-me'] }); setSectorEdit(null); },
+  });
 
   const totalPresupuesto = frentesQ.data?.reduce((s: bigint, f: any) => s + BigInt(f.presupuestoTotalCentavos), 0n) || 0n;
   const totalConsumido = frentesQ.data?.reduce((s: bigint, f: any) => s + BigInt(f.consumidoCentavos), 0n) || 0n;
@@ -20,6 +30,48 @@ export default function AdminHomePage() {
         <p className="text-[12.5px] md:text-[13px] text-gray-500 mt-1">
           Gestión de catálogos maestros: frentes de obra, proveedores, materiales y usuarios
         </p>
+      </div>
+
+      {/* Configuración: sector de la empresa */}
+      <div className="card p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">{tenantQ.data?.sector?.iconEmoji || '🏢'}</div>
+          <div>
+            <div className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider">Sector de la empresa</div>
+            <div className="text-[15px] font-semibold text-navy-900">
+              {tenantQ.data?.sector?.nombre || 'Sin sector asignado'}
+            </div>
+          </div>
+        </div>
+        {sectorEdit === null ? (
+          <button
+            onClick={() => setSectorEdit(tenantQ.data?.sectorId || '')}
+            className="btn btn-secondary btn-sm"
+          >
+            Cambiar sector
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <select
+              value={sectorEdit}
+              onChange={(e) => setSectorEdit(e.target.value)}
+              className="input !w-auto"
+            >
+              <option value="">— Seleccionar —</option>
+              {(sectoresQ.data || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.iconEmoji} {s.nombre}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => sectorEdit && cambiarSector.mutate(sectorEdit)}
+              disabled={cambiarSector.isPending || !sectorEdit}
+              className="btn btn-primary btn-sm"
+            >
+              {cambiarSector.isPending ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button onClick={() => setSectorEdit(null)} className="btn btn-secondary btn-sm">Cancelar</button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
