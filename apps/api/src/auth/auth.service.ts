@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -6,7 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { LoginInput } from '@control-obra/shared';
+import { LoginInput, ChangePasswordInput } from '@control-obra/shared';
 
 @Injectable()
 export class AuthService {
@@ -72,8 +73,36 @@ export class AuthService {
         apellidos: user.apellidos,
         iniciales: user.iniciales,
         roles: user.roles.map((r) => r.rolId),
+        passwordChangeRequired: user.passwordChangeRequired,
       },
     };
+  }
+
+  async changePassword(userId: string, input: ChangePasswordInput) {
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
+    if (!user || !user.activo || user.deletedAt) {
+      throw new UnauthorizedException('Usuario inválido');
+    }
+    const ok = await argon2.verify(user.passwordHash, input.currentPassword);
+    if (!ok) throw new BadRequestException('Contraseña actual incorrecta');
+
+    if (input.currentPassword === input.newPassword) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual');
+    }
+
+    const newHash = await argon2.hash(input.newPassword);
+    await this.prisma.usuario.update({
+      where: { id: userId },
+      data: { passwordHash: newHash, passwordChangeRequired: false },
+    });
+
+    // Revocar todas las sesiones excepto cualquiera futura — fuerza re-login en otros dispositivos
+    await this.prisma.sesion.updateMany({
+      where: { usuarioId: userId, revocadoAt: null },
+      data: { revocadoAt: new Date() },
+    });
+
+    return { ok: true };
   }
 
   async refresh(refreshToken: string) {

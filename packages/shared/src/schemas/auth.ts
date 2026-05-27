@@ -13,6 +13,12 @@ export const refreshSchema = z.object({
 });
 export type RefreshInput = z.infer<typeof refreshSchema>;
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Contraseña actual requerida'),
+  newPassword: z.string().min(8, 'Mínimo 8 caracteres'),
+});
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
 export const authTokensResponse = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),

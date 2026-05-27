@@ -111,6 +111,7 @@ export interface AuthResponse {
     apellidos: string;
     iniciales: string;
     roles: string[];
+    passwordChangeRequired?: boolean;
   };
 }
 

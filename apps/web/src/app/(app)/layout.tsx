@@ -10,8 +10,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = typeof window !== 'undefined' && localStorage.getItem('control_obra_token');
-    if (!token) router.replace('/login');
-  }, [router]);
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    // Si el usuario debe cambiar contraseña, redirigir antes de mostrar el dashboard
+    if (user?.passwordChangeRequired) router.replace('/change-password');
+  }, [router, user?.passwordChangeRequired]);
 
   if (!user) {
     return (

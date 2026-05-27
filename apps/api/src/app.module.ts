@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -31,6 +32,9 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
       isGlobal: true,
       envFilePath: ['.env', '../../.env', '../.env'],
     }),
+    // Rate-limit global. Default: 60 req/min por IP en TODA la API.
+    // Endpoints sensibles overridean con @Throttle({...}) más estricto.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL || 'info',
@@ -61,6 +65,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     PromoCodesModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

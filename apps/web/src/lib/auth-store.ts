@@ -10,6 +10,7 @@ export interface AuthUser {
   iniciales: string;
   roles: string[];
   frentesAsignados?: string[];
+  passwordChangeRequired?: boolean;
 }
 
 interface AuthState {
