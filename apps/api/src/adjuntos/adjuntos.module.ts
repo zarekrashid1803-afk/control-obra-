@@ -7,8 +7,6 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagg
 import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { Response } from 'express';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -21,12 +19,13 @@ const SIGNED_URL_TTL_SEC = 3600; // 1 hora
 @Injectable()
 class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private client: SupabaseClient | null = null;
   private bucket = process.env.SUPABASE_STORAGE_BUCKET || 'attachments';
 
-  // Lazy: si faltan vars, no rompe el boot — solo falla cuando alguien intente subir/servir un archivo.
-  private getClient(): SupabaseClient {
-    if (this.client) return this.client;
+  // Llamamos la REST API de Storage directo con fetch (nativo en Node 18+).
+  // Evitamos @supabase/supabase-js porque su cliente Realtime requiere
+  // WebSocket nativo (Node 22+) y revienta en Node 20 aunque solo usemos Storage.
+  // Las keys nuevas sb_secret_ van en el header `apikey` (no son JWT).
+  private getConfig(): { baseUrl: string; key: string } {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) {
@@ -35,47 +34,59 @@ class StorageService {
         'Configurar en .env (local) o en Render dashboard → Environment (prod).',
       );
     }
-    this.client = createClient(url, key, {
-      auth: { persistSession: false },
-      // Node 20 no tiene WebSocket nativo (sí Node 22+). supabase-js instancia
-      // el cliente Realtime eagerly y revienta sin esto. Solo usamos Storage
-      // (HTTP), pero hay que pasar el transport igual.
-      realtime: { transport: WebSocket as any },
-    });
-    return this.client;
+    return { baseUrl: `${url.replace(/\/$/, '')}/storage/v1`, key };
   }
 
   async upload(buffer: Buffer, path: string, contentType: string) {
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('Archivo vacío o no recibido correctamente');
     }
+    const { baseUrl, key } = this.getConfig();
     try {
-      const { error } = await this.getClient().storage
-        .from(this.bucket)
-        .upload(path, buffer, { contentType, upsert: false });
-      if (error) {
-        this.logger.error(`Supabase upload error (bucket=${this.bucket}, path=${path}): ${error.message}`);
-        throw new BadRequestException(`No se pudo subir el archivo: ${error.message}`);
+      const res = await fetch(`${baseUrl}/object/${this.bucket}/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': contentType,
+          'x-upsert': 'false',
+        },
+        body: buffer,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        this.logger.error(`Storage upload failed ${res.status} (bucket=${this.bucket}, path=${path}): ${text}`);
+        throw new BadRequestException(
+          `No se pudo subir el archivo (${res.status}). Verificar que el bucket '${this.bucket}' exista.`,
+        );
       }
     } catch (e: any) {
       if (e instanceof BadRequestException) throw e;
       this.logger.error(`Storage upload exception: ${e?.message || e}`, e?.stack);
-      throw new BadRequestException(
-        `Error de Storage: ${e?.message || 'desconocido'}. Verificar que el bucket '${this.bucket}' exista y que SUPABASE_SERVICE_ROLE_KEY sea válida.`,
-      );
+      throw new BadRequestException(`Error de Storage: ${e?.message || 'desconocido'}`);
     }
   }
 
   async signedUrl(path: string): Promise<string> {
+    const { baseUrl, key } = this.getConfig();
     try {
-      const { data, error } = await this.getClient().storage
-        .from(this.bucket)
-        .createSignedUrl(path, SIGNED_URL_TTL_SEC);
-      if (error || !data) {
-        this.logger.error(`Supabase signedUrl error (path=${path}): ${error?.message}`);
-        throw new BadRequestException(`No se pudo generar el enlace: ${error?.message}`);
+      const res = await fetch(`${baseUrl}/object/sign/${this.bucket}/${path}`, {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: SIGNED_URL_TTL_SEC }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        this.logger.error(`Storage signedUrl failed ${res.status} (path=${path}): ${text}`);
+        throw new BadRequestException(`No se pudo generar el enlace (${res.status})`);
       }
-      return data.signedUrl;
+      const data = (await res.json()) as { signedURL: string };
+      // signedURL es relativo: /object/sign/bucket/path?token=... → anteponer baseUrl
+      return `${baseUrl}${data.signedURL}`;
     } catch (e: any) {
       if (e instanceof BadRequestException) throw e;
       this.logger.error(`Storage signedUrl exception: ${e?.message || e}`);
