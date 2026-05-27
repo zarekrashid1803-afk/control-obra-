@@ -297,10 +297,17 @@ export const auditoria = {
  * Descarga un archivo binario (Excel, PDF) del API y dispara el download.
  */
 export async function downloadFile(path: string, filename: string): Promise<void> {
-  const token = (typeof window !== 'undefined' && localStorage.getItem('control_obra_token')) || '';
-  const res = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const doFetch = async () => {
+    const token = (typeof window !== 'undefined' && localStorage.getItem('control_obra_token')) || '';
+    return fetch(`${API_BASE}${API_PREFIX}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  };
+  let res = await doFetch();
+  if (res.status === 401 && getRefreshToken()) {
+    const ok = await tryRefresh();
+    if (ok) res = await doFetch();
+  }
   if (!res.ok) {
     let body: any = null;
     try { body = await res.json(); } catch { body = await res.text(); }
@@ -319,16 +326,27 @@ export async function downloadFile(path: string, filename: string): Promise<void
 }
 
 export async function uploadAdjunto(file: File): Promise<{ id: string; urlS3: string; nombre: string; mimeType: string }> {
-  const token = (typeof window !== 'undefined' && localStorage.getItem('control_obra_token')) || '';
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${API_BASE}${API_PREFIX}/adjuntos`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
-  });
+
+  const doUpload = async () => {
+    const token = (typeof window !== 'undefined' && localStorage.getItem('control_obra_token')) || '';
+    return fetch(`${API_BASE}${API_PREFIX}/adjuntos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  };
+
+  let res = await doUpload();
+  // Auto-refresh en 401 y reintentar una vez (igual que api())
+  if (res.status === 401 && getRefreshToken()) {
+    const ok = await tryRefresh();
+    if (ok) res = await doUpload();
+  }
   if (!res.ok) {
-    const body = await res.text();
+    let body: any = null;
+    try { body = await res.json(); } catch { body = await res.text(); }
     throw new ApiError(res.status, body);
   }
   return res.json();
