@@ -153,25 +153,34 @@ export default function DetalleOCPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          {(canEnviar || canAnular) && (
-            <div className="card p-4 space-y-2 bg-gold-100 border-gold-500/40">
-              <div className="text-[11px] uppercase font-semibold text-gold-700 tracking-wider mb-1">Acciones</div>
-              {canEnviar && (
-                <button onClick={() => enviar.mutate()} disabled={enviar.isPending} className="btn btn-accent w-full justify-center py-2.5">
-                  {enviar.isPending ? 'Enviando…' : '📤 Enviar al proveedor'}
-                </button>
-              )}
-              {canAnular && (
-                <button
-                  onClick={() => { const m = prompt('Motivo de la anulación:'); if (m) anular.mutate(m); }}
-                  disabled={anular.isPending}
-                  className="btn btn-secondary w-full justify-center text-st-rechazada border-red-200"
-                >
-                  ✗ Anular OC
-                </button>
-              )}
-            </div>
-          )}
+          <div className="card p-4 space-y-2 bg-gold-100 border-gold-500/40">
+            <div className="text-[11px] uppercase font-semibold text-gold-700 tracking-wider mb-1">Acciones</div>
+
+            {/* Descargar PDF — siempre disponible (independiente del estado) */}
+            <a
+              href={`${process.env.NEXT_PUBLIC_API_BASE || ''}/api/v1/ordenes-compra/${id}/pdf`}
+              target="_blank"
+              rel="noopener"
+              className="btn btn-secondary w-full justify-center py-2.5"
+            >
+              📄 Descargar PDF
+            </a>
+
+            {canEnviar && (
+              <button onClick={() => enviar.mutate()} disabled={enviar.isPending} className="btn btn-accent w-full justify-center py-2.5">
+                {enviar.isPending ? 'Enviando…' : '✉️ Enviar PDF al proveedor'}
+              </button>
+            )}
+            {canAnular && (
+              <button
+                onClick={() => { const m = prompt('Motivo de la anulación:'); if (m) anular.mutate(m); }}
+                disabled={anular.isPending}
+                className="btn btn-secondary w-full justify-center text-st-rechazada border-red-200"
+              >
+                ✗ Anular OC
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

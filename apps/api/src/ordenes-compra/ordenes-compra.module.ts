@@ -1,13 +1,15 @@
 import {
-  Body, Controller, Get, Module, Param, ParseUUIDPipe, Post, Query,
+  BadRequestException, Body, Controller, Get, Module, Param, ParseUUIDPipe, Post, Query, Res,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { generarOCSchema, GenerarOCInput, paginationQuerySchema, PaginationQuery } from '@control-obra/shared';
 import { RequireRoles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { OrdenesCompraService } from './ordenes-compra.service';
 import { RequisicionesModule } from '../requisiciones/requisiciones.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @ApiTags('ordenes-compra')
 @ApiBearerAuth()
@@ -32,7 +34,19 @@ class OrdenesCompraController {
 
   @Post(':id/enviar')
   @RequireRoles('compras', 'admin')
-  enviar(@Param('id', ParseUUIDPipe) id: string) { return this.svc.enviar(id); }
+  @ApiOperation({ summary: 'Marcar OC como enviada y mandar PDF al email del proveedor' })
+  async enviar(@Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.enviarConEmail(id);
+  }
+
+  @Get(':id/pdf')
+  @ApiOperation({ summary: 'Descargar el PDF de la orden de compra' })
+  async pdf(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.generarPdf(id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
+  }
 
   @Post(':id/anular')
   @RequireRoles('compras', 'admin', 'director')
@@ -42,7 +56,7 @@ class OrdenesCompraController {
 }
 
 @Module({
-  imports: [RequisicionesModule],
+  imports: [RequisicionesModule, NotificationsModule],
   providers: [OrdenesCompraService],
   controllers: [OrdenesCompraController],
   exports: [OrdenesCompraService],

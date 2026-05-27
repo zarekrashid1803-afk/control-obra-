@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import type { GenerarOCInput } from '@control-obra/shared';
 import { RequisicionesService } from '../requisiciones/requisiciones.service';
+import { EmailService } from '../notifications/notifications.module';
+import { generarOCPdf } from './oc-pdf';
 
 const IVA = 0.19;
 
@@ -15,7 +18,67 @@ export class OrdenesCompraService {
   constructor(
     private prisma: PrismaService,
     private requisiciones: RequisicionesService,
+    private email: EmailService,
   ) {}
+
+  async generarPdf(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    const oc = await this.getById(id);
+    const buffer = await generarOCPdf(oc);
+    return { buffer, filename: `${oc.codigo || 'OC'}.pdf` };
+  }
+
+  async enviarConEmail(id: string) {
+    const oc = await this.getById(id);
+    if (oc.estado !== 'borrador') {
+      throw new ConflictException(`Solo se puede enviar una OC en estado borrador. Actual: ${oc.estado}`);
+    }
+    if (!oc.proveedor?.email) {
+      throw new BadRequestException(
+        `El proveedor ${oc.proveedor?.razonSocial} no tiene email registrado. Agrégalo en /admin/proveedores antes de enviar.`,
+      );
+    }
+
+    // Generar PDF
+    const buffer = await generarOCPdf(oc);
+    const filename = `${oc.codigo}.pdf`;
+
+    // Enviar email con PDF adjunto
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://control-obra-web.vercel.app';
+    const totalFmt = new Intl.NumberFormat('es-CO', {
+      style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+    }).format(Number(oc.totalCentavos) / 100);
+
+    await this.email.send({
+      to: oc.proveedor.email,
+      subject: `Orden de Compra ${oc.codigo}`,
+      html: `
+<div style="font-family:Inter,Arial,sans-serif;background:#f5f6f7;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#000;color:#fff;padding:20px 24px;">
+      <div style="font-size:11px;letter-spacing:2px;opacity:0.7;">ORDEN DE COMPRA</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px;font-family:monospace;">${oc.codigo}</div>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px 0;">Estimados <strong>${oc.proveedor.razonSocial}</strong>,</p>
+      <p style="margin:0 0 16px 0;">
+        Adjunto a este correo encontrarán nuestra orden de compra <strong>${oc.codigo}</strong> por un valor total de <strong>${totalFmt}</strong>.
+      </p>
+      <p style="margin:0 0 16px 0;">Por favor confirmar recepción de esta orden a la mayor brevedad posible.</p>
+      <p style="margin:24px 0 8px 0;color:#686B6C;font-size:13px;">Quedamos atentos.</p>
+    </div>
+    <div style="padding:16px 24px;background:#f5f6f7;font-size:11px;color:#686B6C;text-align:center;">
+      Project by Orion · ${FRONTEND_URL}
+    </div>
+  </div>
+</div>`,
+      attachments: [{ filename, content: buffer }],
+    });
+
+    return this.prisma.ordenCompra.update({
+      where: { id },
+      data: { estado: 'enviada', enviadaAt: new Date() },
+    });
+  }
 
   async list(params: { page: number; pageSize: number; estado?: string }) {
     const { page, pageSize, estado } = params;

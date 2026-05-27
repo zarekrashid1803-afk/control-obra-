@@ -26,7 +26,12 @@ export class EmailService {
    * Envía un email. Fire-and-forget desde el caller.
    * Si falla o no hay key, loguea y devuelve sin throw.
    */
-  async send(opts: { to: string | string[]; subject: string; html: string }): Promise<boolean> {
+  async send(opts: {
+    to: string | string[];
+    subject: string;
+    html: string;
+    attachments?: { filename: string; content: Buffer }[];
+  }): Promise<boolean> {
     const client = this.getClient();
     if (!client) {
       this.logger.warn(`[email skipped — sin RESEND_API_KEY] To: ${opts.to} · Subject: ${opts.subject}`);
@@ -38,6 +43,7 @@ export class EmailService {
         to: opts.to,
         subject: opts.subject,
         html: opts.html,
+        attachments: opts.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
       });
       if (error) {
         this.logger.error(`Resend error: ${error.message}`);
