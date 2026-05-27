@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { auth, setToken, setRefreshToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useVocab } from '@/lib/vocab';
 import { LogoOrion } from './logo-orion';
 
 type NavItem = {
@@ -15,29 +16,34 @@ type NavItem = {
   separator?: boolean;
 };
 
-const navItems: NavItem[] = [
-  { href: '/dashboard',           label: 'Inicio',                  icon: '🏠' },
-  // 8 secciones operativas oficiales
-  { href: '/caja',                label: 'Caja menor principal',    icon: '💵', separator: true },
-  { href: '/caja/legalizacion',   label: 'Arqueo y legalización',   icon: '📑' },
-  { href: '/punto-obra',          label: 'Punto de obra',           icon: '🏗️' },
-  { href: '/evaluacion',          label: 'Evaluación y aprobación', icon: '✓' },
-  { href: '/ordenes-compra',      label: 'Compras general',         icon: '🧾' },
-  { href: '/requisiciones',       label: 'Requisición general',     icon: '📋' },
-  { href: '/bodega',              label: 'Bodega → punto de obra',  icon: '📦' },
-  { href: '/inventario',          label: 'Inventarios (E/S)',       icon: '📊' },
-  // Secundarias
-  { href: '/documentos-soporte',  label: 'Doc. soporte (DSNE)',     icon: '📄', separator: true },
-  { href: '/reportes',            label: 'Reportes',                icon: '📥', rolesPermitidos: ['admin', 'director', 'auditor', 'compras', 'caja'] },
-  { href: '/auditoria',           label: 'Auditoría',               icon: '🔍', rolesPermitidos: ['admin', 'director', 'auditor'] },
-  { href: '/admin',               label: 'Admin',                   icon: '⚙️', rolesPermitidos: ['admin'] },
-];
+// Construye los items de navegación con vocabulario adaptado al sector.
+function buildNavItems(vocab: Record<string, string>): NavItem[] {
+  return [
+    { href: '/dashboard',           label: 'Inicio',                  icon: '🏠' },
+    // 8 secciones operativas oficiales
+    { href: '/caja',                label: 'Caja menor principal',    icon: '💵', separator: true },
+    { href: '/caja/legalizacion',   label: 'Arqueo y legalización',   icon: '📑' },
+    { href: '/punto-obra',          label: vocab.puntoDeObra,         icon: '🏗️' },
+    { href: '/evaluacion',          label: 'Evaluación y aprobación', icon: '✓' },
+    { href: '/ordenes-compra',      label: 'Compras general',         icon: '🧾' },
+    { href: '/requisiciones',       label: 'Requisición general',     icon: '📋' },
+    { href: '/bodega',              label: `Bodega → ${vocab.puntoDeObra.toLowerCase()}`, icon: '📦' },
+    { href: '/inventario',          label: 'Inventarios (E/S)',       icon: '📊' },
+    // Secundarias
+    { href: '/documentos-soporte',  label: 'Doc. soporte (DSNE)',     icon: '📄', separator: true },
+    { href: '/reportes',            label: 'Reportes',                icon: '📥', rolesPermitidos: ['admin', 'director', 'auditor', 'compras', 'caja'] },
+    { href: '/auditoria',           label: 'Auditoría',               icon: '🔍', rolesPermitidos: ['admin', 'director', 'auditor'] },
+    { href: '/admin',               label: 'Admin',                   icon: '⚙️', rolesPermitidos: ['admin'] },
+  ];
+}
 
 export function AppBar() {
   const path = usePathname();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clear = useAuthStore((s) => s.clear);
+  const vocab = useVocab();
+  const navItems = buildNavItems(vocab);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Cerrar drawer al cambiar de ruta

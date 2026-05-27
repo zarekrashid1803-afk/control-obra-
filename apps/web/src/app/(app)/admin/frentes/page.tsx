@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { frentes, usuarios, ApiError } from '@/lib/api';
 import { Drawer } from '@/components/drawer';
 import { fmtCOP } from '@/lib/utils';
+import { useVocab } from '@/lib/vocab';
 
 type FrenteForm = {
   codigo: string;
@@ -61,6 +62,7 @@ function FrentesInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const qc = useQueryClient();
+  const vocab = useVocab();
   const editId = sp.get('id');
   const isNew = sp.get('new') === '1';
   const drawerOpen = !!editId || isNew;
@@ -170,10 +172,10 @@ function FrentesInner() {
     <div className="max-w-[1440px] mx-auto p-4 md:p-8">
       <div className="flex justify-between items-end mb-5 gap-3 flex-wrap">
         <div>
-          <h1 className="text-[20px] md:text-[22px] font-bold text-navy-900 tracking-tight">Frentes de Obra</h1>
+          <h1 className="text-[20px] md:text-[22px] font-bold text-navy-900 tracking-tight">{vocab.frentes} de {vocab.obra}</h1>
           <p className="text-[12.5px] md:text-[13px] text-gray-500 mt-1">Centros de costos con presupuesto asignado</p>
         </div>
-        <button onClick={openNew} className="btn btn-primary">+ Nuevo frente</button>
+        <button onClick={openNew} className="btn btn-primary">+ Nuevo {vocab.frente.toLowerCase()}</button>
       </div>
 
       {/* PC: tabla */}

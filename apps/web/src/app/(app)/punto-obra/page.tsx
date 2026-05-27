@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { frentes, requisiciones } from '@/lib/api';
 import { fmtCOP, fmtRelative } from '@/lib/utils';
+import { useVocab } from '@/lib/vocab';
 
 export default function PuntoObraPage() {
+  const vocab = useVocab();
   const frentesQ = useQuery({ queryKey: ['frentes'], queryFn: () => frentes.list() });
   const reqsQ = useQuery({ queryKey: ['requisiciones-recientes'], queryFn: () => requisiciones.list({ pageSize: 200 }) });
 
@@ -25,20 +27,20 @@ export default function PuntoObraPage() {
         <div>
           <div className="text-[11px] text-gray-500 hidden md:flex gap-1.5 mb-1.5">
             <Link href="/dashboard" className="text-navy-700 hover:underline">Inicio</Link>
-            <span>›</span><span>Punto de obra</span>
+            <span>›</span><span>{vocab.puntoDeObra}</span>
           </div>
           <h1 className="text-[20px] md:text-[22px] font-bold text-navy-900 tracking-tight">
-            Punto de obra
+            {vocab.puntoDeObra}
           </h1>
           <p className="text-[12.5px] md:text-[13px] text-gray-500 mt-1">
-            Estado operacional de cada obra activa · presupuesto, actividad y alertas
+            Estado operacional de cada {vocab.obra.toLowerCase()} activa · presupuesto, actividad y alertas
           </p>
         </div>
         <Link
           href="/admin/frentes?new=1&returnTo=/punto-obra"
           className="btn btn-primary"
         >
-          + Nuevo punto de obra
+          + Nuevo {vocab.puntoDeObra.toLowerCase()}
         </Link>
       </div>
 
