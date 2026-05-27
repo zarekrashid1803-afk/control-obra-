@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/decorators/current-user.decorator';
+import { NotificationsService } from '../notifications/notifications.module';
 import { evaluarTransicion, AccionRequisicion } from './state-machine';
 import type {
   CreateRequisicionInput,
@@ -16,7 +17,10 @@ const IVA = 0.19;
 
 @Injectable()
 export class RequisicionesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   async list(filter: RequisicionFilter, pagination: { page: number; pageSize: number; search?: string }, user: AuthUser) {
     const where: any = { deletedAt: null };
@@ -148,6 +152,9 @@ export class RequisicionesService {
       where: { id },
       select: {
         id: true, estado: true, solicitanteId: true, frenteId: true,
+        codigo: true, descripcion: true, totalCentavos: true, tenantId: true,
+        solicitante: { select: { nombres: true, apellidos: true } },
+        frente: { select: { nombre: true } },
       },
     });
     if (!r) throw new NotFoundException();
@@ -201,6 +208,29 @@ export class RequisicionesService {
       }
       return upd;
     });
+
+    // Notificaciones fire-and-forget — no bloquear la respuesta del endpoint.
+    // void hace explícito que ignoramos la promesa.
+    if (estadoNuevo === 'pendiente') {
+      void this.notifications.notificarRequisicionPendiente({
+        requisicionId: r.id,
+        codigo: r.codigo,
+        descripcion: r.descripcion,
+        montoCentavos: r.totalCentavos,
+        tenantId: r.tenantId,
+        solicitanteNombre: `${r.solicitante.nombres} ${r.solicitante.apellidos}`,
+        frenteNombre: r.frente?.nombre,
+      });
+    }
+    if (estadoNuevo === 'aprobada' || estadoNuevo === 'rechazada') {
+      void this.notifications.notificarRequisicionResuelta({
+        requisicionId: r.id,
+        codigo: r.codigo,
+        estado: estadoNuevo,
+        motivo: input.motivoRechazo,
+        solicitanteId: r.solicitanteId,
+      });
+    }
 
     return updated;
   }
