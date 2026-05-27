@@ -177,7 +177,7 @@ model Sesion {
 model FrenteObra {
   id                       String    @id @default(uuid())
   tenantId                 Int       @default(1) @map("tenant_id")
-  codigo                   String    @unique
+  codigo                   String    // único por tenant (ver @@unique abajo), no global
   nombre                   String
   presupuestoTotalCentavos BigInt    @map("presupuesto_total_centavos")
   consumidoCentavos        BigInt    @default(0) @map("consumido_centavos")
@@ -203,7 +203,9 @@ model FrenteObra {
   inventario               InventarioFrente[]
   documentosSoporte        DocumentoSoporte[]
 
+  @@unique([tenantId, codigo]) // FR-001 puede repetirse entre tenants distintos
   @@index([estado])
+  @@index([tenantId])
   @@map("frente_obra")
 }
 

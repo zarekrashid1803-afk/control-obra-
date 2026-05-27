@@ -6,9 +6,9 @@ import type { CreateFrenteInput, UpdateFrenteInput } from '@control-obra/shared'
 export class FrentesService {
   constructor(private prisma: PrismaService) {}
 
-  async list() {
+  async list(tenantId: number) {
     const data = await this.prisma.frenteObra.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, tenantId },
       orderBy: { codigo: 'asc' },
       include: { responsable: { select: { id: true, nombres: true, apellidos: true, iniciales: true } } },
     });
@@ -21,29 +21,34 @@ export class FrentesService {
     }));
   }
 
-  async getById(id: string) {
+  async getById(id: string, tenantId?: number) {
     const f = await this.prisma.frenteObra.findUnique({
       where: { id },
       include: { responsable: true },
     });
     if (!f || f.deletedAt) throw new NotFoundException();
+    // Aislamiento por tenant: no permitir ver frentes de otro tenant
+    if (tenantId !== undefined && f.tenantId !== tenantId) throw new NotFoundException();
     return f;
   }
 
-  async getByCodigo(codigo: string) {
-    return this.prisma.frenteObra.findUnique({ where: { codigo } });
+  async getByCodigo(codigo: string, tenantId: number) {
+    return this.prisma.frenteObra.findUnique({
+      where: { tenantId_codigo: { tenantId, codigo } },
+    });
   }
 
-  async create(input: CreateFrenteInput) {
-    return this.prisma.frenteObra.create({ data: input });
+  async create(input: CreateFrenteInput, tenantId: number) {
+    return this.prisma.frenteObra.create({ data: { ...input, tenantId } });
   }
 
-  async update(id: string, input: UpdateFrenteInput) {
-    await this.getById(id);
+  async update(id: string, input: UpdateFrenteInput, tenantId: number) {
+    await this.getById(id, tenantId);
     return this.prisma.frenteObra.update({ where: { id }, data: input });
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, tenantId: number) {
+    await this.getById(id, tenantId);
     await this.prisma.frenteObra.update({ where: { id }, data: { deletedAt: new Date() } });
     return { ok: true };
   }
