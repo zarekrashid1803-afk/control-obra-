@@ -18,10 +18,11 @@ export default function TrialExpiredPage() {
     }).catch(() => {});
   }, []);
 
-  async function cerrarSesion() {
-    try { await auth.logout(); } catch {}
+  function cerrarSesion() {
+    // Limpiar local primero (instantáneo), backend en background
     setToken(null);
     setRefreshToken(null);
+    auth.logout().catch(() => {});
     window.location.href = '/login';
   }
 

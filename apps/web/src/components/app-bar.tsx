@@ -43,11 +43,14 @@ export function AppBar() {
   // Cerrar drawer al cambiar de ruta
   useEffect(() => { setDrawerOpen(false); }, [path]);
 
-  async function logout() {
-    try { await auth.logout(); } catch {}
+  function logout() {
+    // Limpiar estado local primero (instantáneo) y redirigir.
+    // El POST /auth/logout va en background — si Render está dormido o
+    // falla, no bloquea al usuario.
     setToken(null);
     setRefreshToken(null);
     clear();
+    auth.logout().catch(() => {});
     router.push('/login');
   }
 
