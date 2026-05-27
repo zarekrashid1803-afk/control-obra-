@@ -6,6 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
+import { authenticator } from 'otplib';
+import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginInput, ChangePasswordInput } from '@control-obra/shared';
 
@@ -31,9 +33,18 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // MFA — si está habilitado, requerir código (skip si beta)
-    if (user.mfaEnabled && !input.mfaCode) {
-      throw new UnauthorizedException('Se requiere código MFA');
+    // MFA — si está habilitado, requerir y verificar el código TOTP
+    if (user.mfaEnabled) {
+      if (!input.mfaCode) {
+        // Cuerpo distinguible para que el front muestre el campo de código
+        throw new UnauthorizedException({ error: 'MFA_REQUIRED', message: 'Se requiere código de verificación' });
+      }
+      const ok2fa = user.mfaSecret
+        ? authenticator.verify({ token: input.mfaCode, secret: user.mfaSecret })
+        : false;
+      if (!ok2fa) {
+        throw new UnauthorizedException({ error: 'MFA_INVALID', message: 'Código de verificación inválido' });
+      }
     }
 
     const accessToken = await this.jwt.signAsync({
@@ -145,5 +156,64 @@ export class AuthService {
 
   async hashPassword(password: string): Promise<string> {
     return argon2.hash(password);
+  }
+
+  // ============================================================
+  // MFA / 2FA (TOTP)
+  // ============================================================
+
+  /** Genera un secreto TOTP nuevo (aún no habilitado) y devuelve el QR para escanear. */
+  async mfaSetup(userId: string) {
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+
+    const secret = authenticator.generateSecret();
+    const otpauth = authenticator.keyuri(user.email, 'Control de Obra', secret);
+    const qrDataUrl = await QRCode.toDataURL(otpauth);
+
+    // Guardamos el secreto pero NO habilitamos hasta que confirme con un código válido
+    await this.prisma.usuario.update({
+      where: { id: userId },
+      data: { mfaSecret: secret },
+    });
+
+    return { secret, otpauthUrl: otpauth, qrDataUrl };
+  }
+
+  /** Verifica el primer código y activa MFA. */
+  async mfaEnable(userId: string, code: string) {
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
+    if (!user?.mfaSecret) {
+      throw new BadRequestException('Primero genera el código QR (setup)');
+    }
+    const ok = authenticator.verify({ token: code, secret: user.mfaSecret });
+    if (!ok) throw new BadRequestException('Código inválido. Verifica la hora de tu dispositivo.');
+
+    await this.prisma.usuario.update({ where: { id: userId }, data: { mfaEnabled: true } });
+    return { ok: true, mfaEnabled: true };
+  }
+
+  /** Desactiva MFA (requiere un código válido para confirmar identidad). */
+  async mfaDisable(userId: string, code: string) {
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
+    if (!user?.mfaEnabled || !user.mfaSecret) {
+      throw new BadRequestException('MFA no está activo');
+    }
+    const ok = authenticator.verify({ token: code, secret: user.mfaSecret });
+    if (!ok) throw new BadRequestException('Código inválido');
+
+    await this.prisma.usuario.update({
+      where: { id: userId },
+      data: { mfaEnabled: false, mfaSecret: null },
+    });
+    return { ok: true, mfaEnabled: false };
+  }
+
+  async mfaStatus(userId: string) {
+    const user = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true },
+    });
+    return { mfaEnabled: !!user?.mfaEnabled };
   }
 }

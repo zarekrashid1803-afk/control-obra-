@@ -116,13 +116,17 @@ export interface AuthResponse {
 }
 
 export const auth = {
-  login: (email: string, password: string) =>
+  login: (email: string, password: string, mfaCode?: string) =>
     api<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, ...(mfaCode ? { mfaCode } : {}) }),
       skipAuth: true,
     }),
   logout: () => api('/auth/logout', { method: 'POST' }),
+  mfaStatus: () => api<{ mfaEnabled: boolean }>('/auth/mfa/status'),
+  mfaSetup: () => api<{ secret: string; otpauthUrl: string; qrDataUrl: string }>('/auth/mfa/setup', { method: 'POST' }),
+  mfaEnable: (code: string) => api<{ ok: boolean; mfaEnabled: boolean }>('/auth/mfa/enable', { method: 'POST', body: JSON.stringify({ code }) }),
+  mfaDisable: (code: string) => api<{ ok: boolean; mfaEnabled: boolean }>('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
 };
 
 export interface SignupPayload {

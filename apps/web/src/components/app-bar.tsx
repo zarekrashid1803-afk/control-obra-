@@ -116,9 +116,15 @@ export function AppBar() {
               <div className="text-[10.5px] text-white/60 capitalize truncate">{user?.roles?.join(' · ')}</div>
             </div>
           </div>
+          <Link
+            href="/seguridad"
+            className="block w-full mt-2 py-1.5 text-center text-[11.5px] font-medium text-white/70 hover:text-white hover:bg-white/8 rounded transition"
+          >
+            🔒 Seguridad (2FA)
+          </Link>
           <button
             onClick={logout}
-            className="w-full mt-2 py-1.5 text-[11.5px] font-medium text-white/70 hover:text-white hover:bg-white/8 rounded transition"
+            className="w-full mt-1 py-1.5 text-[11.5px] font-medium text-white/70 hover:text-white hover:bg-white/8 rounded transition"
           >
             Cerrar sesión
           </button>

@@ -10,6 +10,8 @@ export default function LoginPage() {
   const setUser = useAuthStore((s) => s.setUser);
   const [email, setEmail] = useState('juan.mejia@andina.co');
   const [password, setPassword] = useState('password123');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,14 +20,23 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const data = await auth.login(email, password);
+      const data = await auth.login(email, password, mfaCode || undefined);
       setToken(data.accessToken);
       setRefreshToken(data.refreshToken);
       setUser(data.user);
       router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.body?.message || `Error ${err.status}`);
+        const code = (err.body as any)?.error;
+        if (code === 'MFA_REQUIRED') {
+          setMfaRequired(true);
+          setError('Ingresa el código de tu app de autenticación');
+        } else if (code === 'MFA_INVALID') {
+          setMfaRequired(true);
+          setError('Código de verificación inválido. Intenta de nuevo.');
+        } else {
+          setError(err.body?.message || `Error ${err.status}`);
+        }
       } else {
         setError('No se pudo conectar al servidor');
       }
@@ -78,12 +89,31 @@ export default function LoginPage() {
           />
         </div>
 
+        {mfaRequired && (
+          <div className="mb-6">
+            <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">
+              Código de verificación (2FA)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              autoFocus
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded text-lg tracking-[6px] text-center font-mono focus:outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-500/15"
+            />
+            <p className="text-[11px] text-gray-500 mt-1.5">Abre tu app (Google Authenticator, Authy…) e ingresa el código de 6 dígitos.</p>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}
           className="w-full py-3 bg-navy-900 text-white font-semibold rounded hover:bg-navy-800 transition disabled:opacity-50"
         >
-          {loading ? 'Iniciando sesión…' : 'Iniciar sesión →'}
+          {loading ? 'Iniciando sesión…' : mfaRequired ? 'Verificar y entrar →' : 'Iniciar sesión →'}
         </button>
 
         <div className="mt-5 text-center text-[12.5px] text-gray-500">

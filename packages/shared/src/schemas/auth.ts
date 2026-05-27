@@ -19,6 +19,12 @@ export const changePasswordSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+// Código TOTP de 6 dígitos
+export const mfaCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'El código debe ser de 6 dígitos'),
+});
+export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
+
 export const authTokensResponse = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),

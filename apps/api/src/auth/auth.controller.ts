@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   Ip,
@@ -9,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { loginSchema, refreshSchema, changePasswordSchema, LoginInput, RefreshInput, ChangePasswordInput } from '@control-obra/shared';
+import { loginSchema, refreshSchema, changePasswordSchema, mfaCodeSchema, LoginInput, RefreshInput, ChangePasswordInput, MfaCodeInput } from '@control-obra/shared';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -60,5 +61,36 @@ export class AuthController {
     @Body() body: ChangePasswordInput,
   ) {
     return this.auth.changePassword(user.id, body);
+  }
+
+  // === MFA / 2FA ===
+
+  @Get('mfa/status')
+  @ApiOperation({ summary: 'Estado de MFA del usuario actual' })
+  mfaStatus(@CurrentUser() user: AuthUser) {
+    return this.auth.mfaStatus(user.id);
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Generar secreto + QR para configurar 2FA' })
+  mfaSetup(@CurrentUser() user: AuthUser) {
+    return this.auth.mfaSetup(user.id);
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verificar primer código y activar 2FA' })
+  @UsePipes(new ZodValidationPipe(mfaCodeSchema))
+  mfaEnable(@CurrentUser() user: AuthUser, @Body() body: MfaCodeInput) {
+    return this.auth.mfaEnable(user.id, body.code);
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Desactivar 2FA (requiere código)' })
+  @UsePipes(new ZodValidationPipe(mfaCodeSchema))
+  mfaDisable(@CurrentUser() user: AuthUser, @Body() body: MfaCodeInput) {
+    return this.auth.mfaDisable(user.id, body.code);
   }
 }
