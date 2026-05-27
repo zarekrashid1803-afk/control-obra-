@@ -18,12 +18,17 @@ datasource db {
 // ============================================================
 
 model Tenant {
-  id        Int      @id @default(autoincrement())
-  nombre    String
-  nit       String?  @unique
-  activo    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id            Int       @id @default(autoincrement())
+  nombre        String
+  nit           String?   @unique
+  activo        Boolean   @default(true)
+  // Acceso beta: trialEndsAt controla cuándo el tenant queda bloqueado.
+  // null = no canjeó código todavía (acceso bloqueado).
+  // fecha futura = trial activo.
+  // fecha pasada = trial vencido (bloqueado pero datos persisten).
+  trialEndsAt   DateTime? @map("trial_ends_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   usuarios       Usuario[]
   frentes        FrenteObra[]
@@ -35,8 +40,27 @@ model Tenant {
   arqueos        ArqueoCaja[]
   configuracion  Configuracion[]
   auditLogs      AuditLog[]
+  promoCodes     PromoCode[]
 
   @@map("tenant")
+}
+
+// Códigos de invitación PRE-XXXX que canjea un cliente para crear su tenant.
+// El superadmin (Zarek) los genera desde /admin/codigos y se los manda al cliente.
+model PromoCode {
+  id            String    @id @default(uuid())
+  codigo        String    @unique // PRE-A4B7
+  usedAt        DateTime? @map("used_at")
+  usedByUserId  String?   @map("used_by_user_id")
+  tenantId      Int?      @map("tenant_id") // tenant creado al canjear
+  notes         String?   // a quién se mandó (referencia interna)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  createdByEmail String?  @map("created_by_email") // superadmin que lo generó
+
+  usedBy        Usuario?  @relation("PromoCodeUsedBy", fields: [usedByUserId], references: [id])
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@map("promo_code")
 }
 
 model Rol {
@@ -86,6 +110,7 @@ model Usuario {
   notificacionesRecibidas  Notificacion[]
   auditLogs                AuditLog[]
   documentosSoporte        DocumentoSoporte[]
+  promoCodesCanjeados      PromoCode[]    @relation("PromoCodeUsedBy")
 
   @@index([tenantId])
   @@index([activo])

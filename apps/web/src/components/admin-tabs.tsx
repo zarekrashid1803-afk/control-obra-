@@ -9,6 +9,7 @@ const tabs = [
   { href: '/admin/proveedores',  label: 'Proveedores', icon: '🏢' },
   { href: '/admin/materiales',   label: 'Materiales',  icon: '📦' },
   { href: '/admin/usuarios',     label: 'Usuarios',    icon: '👤' },
+  { href: '/admin/codigos',      label: 'Códigos beta', icon: '🎟️' },
 ];
 
 export function AdminTabs() {

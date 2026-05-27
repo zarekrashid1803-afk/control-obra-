@@ -66,6 +66,12 @@ export async function api<T = any>(
       const ok = await tryRefresh();
       if (ok) return api(path, init);
     }
+    // Trial vencido → redirect global a /trial-expired
+    if (res.status === 402 && body?.error === 'TRIAL_EXPIRED' && typeof window !== 'undefined') {
+      if (window.location.pathname !== '/trial-expired') {
+        window.location.href = '/trial-expired';
+      }
+    }
     throw new ApiError(res.status, body);
   }
 
@@ -116,6 +122,38 @@ export const auth = {
       skipAuth: true,
     }),
   logout: () => api('/auth/logout', { method: 'POST' }),
+};
+
+export interface SignupPayload {
+  codigo: string;
+  email: string;
+  password: string;
+  nombres: string;
+  apellidos: string;
+  nombreConstructora: string;
+}
+
+export const promoCodes = {
+  signup: (body: SignupPayload) =>
+    api<AuthResponse & { tenant: { id: number; nombre: string; trialEndsAt: string } }>(
+      '/promo-codes/signup',
+      { method: 'POST', body: JSON.stringify(body), skipAuth: true },
+    ),
+  status: () =>
+    api<{ trialActive: boolean; trialEndsAt: string | null; horasRestantes: number; tenantNombre: string | null }>(
+      '/promo-codes/status',
+    ),
+  list: () => api<any[]>('/promo-codes'),
+  generar: (cantidad: number, notes?: string) =>
+    api<{ generados: string[]; total: number }>('/promo-codes/generar', {
+      method: 'POST',
+      body: JSON.stringify({ cantidad, notes }),
+    }),
+  extenderTrial: (tenantId: number, horasAdicionales: number) =>
+    api<{ id: number; nombre: string; trialEndsAt: string }>('/promo-codes/extender-trial', {
+      method: 'POST',
+      body: JSON.stringify({ tenantId, horasAdicionales }),
+    }),
 };
 
 export const usuarios = {

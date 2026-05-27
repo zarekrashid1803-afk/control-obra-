@@ -86,7 +86,12 @@ export default function LoginPage() {
           {loading ? 'Iniciando sesión…' : 'Iniciar sesión →'}
         </button>
 
-        <div className="mt-8 px-4 py-3 bg-gray-50 rounded text-[12px] leading-relaxed">
+        <div className="mt-5 text-center text-[12.5px] text-gray-500">
+          ¿Tienes un código de invitación?{' '}
+          <a href="/signup" className="text-navy-900 underline font-medium">Crear cuenta</a>
+        </div>
+
+        <div className="mt-6 px-4 py-3 bg-gray-50 rounded text-[12px] leading-relaxed">
           <strong className="text-navy-900">Usuarios de prueba</strong> (pwd: <code className="bg-white px-1.5 py-0.5 rounded font-mono text-[11px] text-navy-700">password123</code>)
           <br />
           Director: <code className="text-navy-700">juan.mejia@andina.co</code>

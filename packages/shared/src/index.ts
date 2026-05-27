@@ -9,4 +9,5 @@ export * from './schemas/orden-compra';
 export * from './schemas/caja';
 export * from './schemas/bodega';
 export * from './schemas/documento-soporte';
+export * from './schemas/promo-code';
 export * from './schemas/common';

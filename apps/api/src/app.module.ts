@@ -19,6 +19,7 @@ import { HealthModule } from './health/health.module';
 import { DocumentosSoporteModule } from './documentos-soporte/documentos-soporte.module';
 import { AdjuntosModule } from './adjuntos/adjuntos.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { PromoCodesModule } from './promo-codes/promo-codes.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -57,6 +58,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     DocumentosSoporteModule,
     AdjuntosModule,
     ReportesModule,
+    PromoCodesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
