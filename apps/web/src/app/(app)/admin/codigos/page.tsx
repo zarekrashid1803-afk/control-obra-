@@ -6,14 +6,16 @@ import { promoCodes, ApiError } from '@/lib/api';
 export default function CodigosBetaPage() {
   const qc = useQueryClient();
   const listQ = useQuery({ queryKey: ['promo-codes'], queryFn: () => promoCodes.list() });
+  const sectoresQ = useQuery({ queryKey: ['sectores'], queryFn: () => promoCodes.sectores() });
 
   const [cantidad, setCantidad] = useState(1);
   const [notes, setNotes] = useState('');
+  const [sectorId, setSectorId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [ultimoLote, setUltimoLote] = useState<string[] | null>(null);
 
   const generar = useMutation({
-    mutationFn: () => promoCodes.generar(cantidad, notes || undefined),
+    mutationFn: () => promoCodes.generar(cantidad, notes || undefined, sectorId || undefined),
     onSuccess: (data) => {
       setUltimoLote(data.generados);
       setNotes('');
@@ -78,7 +80,7 @@ export default function CodigosBetaPage() {
           <div className="mb-3 px-3 py-2 bg-red-50 text-red-800 text-[13px] rounded border border-red-200">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[100px_220px_1fr_auto] gap-3 items-end">
           <div>
             <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">Cantidad</label>
             <input
@@ -91,12 +93,25 @@ export default function CodigosBetaPage() {
             />
           </div>
           <div>
+            <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">Sector (opcional)</label>
+            <select
+              value={sectorId}
+              onChange={(e) => setSectorId(e.target.value)}
+              className="input"
+            >
+              <option value="">— Que elija el cliente —</option>
+              {(sectoresQ.data || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.iconEmoji} {s.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">Notas (opcional)</label>
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="input"
-              placeholder="Ej. Constructora X — contacto Juan, demo viernes"
+              placeholder="Ej. Empresa X — contacto Juan, demo viernes"
             />
           </div>
           <button
@@ -138,6 +153,7 @@ export default function CodigosBetaPage() {
           <thead>
             <tr>
               <th>Código</th>
+              <th>Sector</th>
               <th>Estado</th>
               <th>Notas</th>
               <th>Canjeado por</th>
@@ -156,6 +172,9 @@ export default function CodigosBetaPage() {
                     <button onClick={() => copiar(c.codigo)} className="font-mono text-[12.5px] font-semibold hover:underline">
                       {c.codigo}
                     </button>
+                  </td>
+                  <td className="text-[12px]">
+                    {c.sector ? <span>{c.sector.iconEmoji} {c.sector.nombre}</span> : <span className="text-gray-400">—</span>}
                   </td>
                   <td>
                     <span className={`badge ${usado ? 'badge-aprobada' : 'badge-borrador'}`}>
@@ -203,7 +222,7 @@ export default function CodigosBetaPage() {
               );
             })}
             {data.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-10 text-gray-500">No hay códigos generados todavía.</td></tr>
+              <tr><td colSpan={8} className="text-center py-10 text-gray-500">No hay códigos generados todavía.</td></tr>
             )}
           </tbody>
         </table>

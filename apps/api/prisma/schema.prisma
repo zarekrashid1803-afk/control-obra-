@@ -22,6 +22,7 @@ model Tenant {
   nombre        String
   nit           String?   @unique
   activo        Boolean   @default(true)
+  sectorId      String?   @map("sector_id") // industria/área del cliente (civil, mecanica, etc.)
   // Acceso beta: trialEndsAt controla cuándo el tenant queda bloqueado.
   // null = no canjeó código todavía (acceso bloqueado).
   // fecha futura = trial activo.
@@ -41,8 +42,29 @@ model Tenant {
   configuracion  Configuracion[]
   auditLogs      AuditLog[]
   promoCodes     PromoCode[]
+  sector         Sector?       @relation(fields: [sectorId], references: [id])
 
   @@map("tenant")
+}
+
+// Catálogo de sectores / industrias que la app soporta.
+// Permite que la app sea multi-uso: civil, mecánica, metalurgia,
+// eléctrica, electromecánica, instrumentación, etc.
+// Tabla en vez de enum para poder añadir sectores sin migration.
+model Sector {
+  id           String   @id // 'civil', 'mecanica', 'metalurgia', ...
+  nombre       String
+  descripcion  String?
+  iconEmoji    String   @default("🏗️") @map("icon_emoji")
+  configJson   Json?    @map("config_json") // vocabulario y defaults futuros
+  orden        Int      @default(100)
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenants      Tenant[]
+  promoCodes   PromoCode[]
+
+  @@map("sector")
 }
 
 // Códigos de invitación PRE-XXXX que canjea un cliente para crear su tenant.
@@ -50,6 +72,7 @@ model Tenant {
 model PromoCode {
   id            String    @id @default(uuid())
   codigo        String    @unique // PRE-A4B7
+  sectorId      String?   @map("sector_id") // preasignado al generar el código
   usedAt        DateTime? @map("used_at")
   usedByUserId  String?   @map("used_by_user_id")
   tenantId      Int?      @map("tenant_id") // tenant creado al canjear
@@ -59,6 +82,7 @@ model PromoCode {
 
   usedBy        Usuario?  @relation("PromoCodeUsedBy", fields: [usedByUserId], references: [id])
   tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  sector        Sector?   @relation(fields: [sectorId], references: [id])
 
   @@map("promo_code")
 }

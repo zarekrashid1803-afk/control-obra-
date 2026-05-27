@@ -102,6 +102,11 @@ export class PromoCodesService {
   }
 
   async generar(input: GenerarPromoCodesInput, superadminEmail: string) {
+    // Si pasaron sectorId, validar que exista
+    if (input.sectorId) {
+      const sector = await this.prisma.sector.findUnique({ where: { id: input.sectorId } });
+      if (!sector) throw new BadRequestException(`Sector '${input.sectorId}' no existe`);
+    }
     const generados: string[] = [];
     let intentos = 0;
     while (generados.length < input.cantidad && intentos < input.cantidad * 5) {
@@ -109,15 +114,27 @@ export class PromoCodesService {
       const codigo = this.generarCodigoUnico();
       try {
         await this.prisma.promoCode.create({
-          data: { codigo, notes: input.notes, createdByEmail: superadminEmail },
+          data: {
+            codigo,
+            notes: input.notes,
+            createdByEmail: superadminEmail,
+            sectorId: input.sectorId,
+          },
         });
         generados.push(codigo);
       } catch (e: any) {
-        // Choque de UNIQUE — reintenta
         if (e?.code !== 'P2002') throw e;
       }
     }
     return { generados, total: generados.length };
+  }
+
+  async listSectores() {
+    return this.prisma.sector.findMany({
+      where: { activo: true },
+      orderBy: { orden: 'asc' },
+      select: { id: true, nombre: true, descripcion: true, iconEmoji: true },
+    });
   }
 
   async list() {
@@ -125,7 +142,8 @@ export class PromoCodesService {
       orderBy: { createdAt: 'desc' },
       include: {
         usedBy: { select: { id: true, email: true, nombres: true, apellidos: true } },
-        tenant: { select: { id: true, nombre: true, trialEndsAt: true } },
+        tenant: { select: { id: true, nombre: true, trialEndsAt: true, sectorId: true } },
+        sector: { select: { id: true, nombre: true, iconEmoji: true } },
       },
     });
     return codes.map((c) => ({
@@ -144,6 +162,13 @@ export class PromoCodesService {
     if (!promo) throw new BadRequestException('Código inválido');
     if (promo.usedAt) throw new BadRequestException('Este código ya fue canjeado');
 
+    // Resolver sector: el que el usuario eligió ganara, sino el preasignado al código
+    const sectorId = input.sectorId || promo.sectorId || null;
+    if (sectorId) {
+      const sector = await this.prisma.sector.findUnique({ where: { id: sectorId } });
+      if (!sector) throw new BadRequestException(`Sector '${sectorId}' no existe`);
+    }
+
     const existe = await this.prisma.usuario.findUnique({ where: { email: input.email } });
     if (existe) throw new ConflictException('Ya existe una cuenta con ese correo');
 
@@ -158,6 +183,7 @@ export class PromoCodesService {
           nombre: input.nombreConstructora,
           trialEndsAt,
           activo: true,
+          sectorId,
         },
       });
 
@@ -217,6 +243,7 @@ export class PromoCodesService {
         id: result.tenant.id,
         nombre: result.tenant.nombre,
         trialEndsAt: result.tenant.trialEndsAt,
+        sectorId: result.tenant.sectorId,
       },
     };
   }
@@ -266,6 +293,13 @@ class PromoCodesController {
   @ApiOperation({ summary: 'Canjear código de invitación y crear tenant + cuenta' })
   signup(@Body(new ZodValidationPipe(signupSchema)) body: SignupInput) {
     return this.svc.signup(body);
+  }
+
+  @Public()
+  @Get('sectores')
+  @ApiOperation({ summary: 'Listar sectores disponibles (para signup)' })
+  sectores() {
+    return this.svc.listSectores();
   }
 
   // === Endpoints autenticados ===

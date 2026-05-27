@@ -132,23 +132,32 @@ export interface SignupPayload {
   nombres: string;
   apellidos: string;
   nombreConstructora: string;
+  sectorId?: string;
+}
+
+export interface Sector {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  iconEmoji: string;
 }
 
 export const promoCodes = {
   signup: (body: SignupPayload) =>
-    api<AuthResponse & { tenant: { id: number; nombre: string; trialEndsAt: string } }>(
+    api<AuthResponse & { tenant: { id: number; nombre: string; trialEndsAt: string; sectorId: string | null } }>(
       '/promo-codes/signup',
       { method: 'POST', body: JSON.stringify(body), skipAuth: true },
     ),
+  sectores: () => api<Sector[]>('/promo-codes/sectores', { skipAuth: true }),
   status: () =>
     api<{ trialActive: boolean; trialEndsAt: string | null; horasRestantes: number; tenantNombre: string | null }>(
       '/promo-codes/status',
     ),
   list: () => api<any[]>('/promo-codes'),
-  generar: (cantidad: number, notes?: string) =>
+  generar: (cantidad: number, notes?: string, sectorId?: string) =>
     api<{ generados: string[]; total: number }>('/promo-codes/generar', {
       method: 'POST',
-      body: JSON.stringify({ cantidad, notes }),
+      body: JSON.stringify({ cantidad, notes, sectorId }),
     }),
   extenderTrial: (tenantId: number, horasAdicionales: number) =>
     api<{ id: number; nombre: string; trialEndsAt: string }>('/promo-codes/extender-trial', {
