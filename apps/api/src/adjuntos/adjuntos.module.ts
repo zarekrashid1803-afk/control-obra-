@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Injectable, Module, Param, Post, UploadedFile, UseInterceptors,
+  Controller, Get, Injectable, Logger, Module, Param, Post, UploadedFile, UseInterceptors,
   BadRequestException, Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -19,6 +19,7 @@ const SIGNED_URL_TTL_SEC = 3600; // 1 hora
 
 @Injectable()
 class StorageService {
+  private readonly logger = new Logger(StorageService.name);
   private client: SupabaseClient | null = null;
   private bucket = process.env.SUPABASE_STORAGE_BUCKET || 'attachments';
 
@@ -38,18 +39,41 @@ class StorageService {
   }
 
   async upload(buffer: Buffer, path: string, contentType: string) {
-    const { error } = await this.getClient().storage
-      .from(this.bucket)
-      .upload(path, buffer, { contentType, upsert: false });
-    if (error) throw new BadRequestException(`Upload falló: ${error.message}`);
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Archivo vacío o no recibido correctamente');
+    }
+    try {
+      const { error } = await this.getClient().storage
+        .from(this.bucket)
+        .upload(path, buffer, { contentType, upsert: false });
+      if (error) {
+        this.logger.error(`Supabase upload error (bucket=${this.bucket}, path=${path}): ${error.message}`);
+        throw new BadRequestException(`No se pudo subir el archivo: ${error.message}`);
+      }
+    } catch (e: any) {
+      if (e instanceof BadRequestException) throw e;
+      this.logger.error(`Storage upload exception: ${e?.message || e}`, e?.stack);
+      throw new BadRequestException(
+        `Error de Storage: ${e?.message || 'desconocido'}. Verificar que el bucket '${this.bucket}' exista y que SUPABASE_SERVICE_ROLE_KEY sea válida.`,
+      );
+    }
   }
 
   async signedUrl(path: string): Promise<string> {
-    const { data, error } = await this.getClient().storage
-      .from(this.bucket)
-      .createSignedUrl(path, SIGNED_URL_TTL_SEC);
-    if (error || !data) throw new BadRequestException(`No se pudo firmar URL: ${error?.message}`);
-    return data.signedUrl;
+    try {
+      const { data, error } = await this.getClient().storage
+        .from(this.bucket)
+        .createSignedUrl(path, SIGNED_URL_TTL_SEC);
+      if (error || !data) {
+        this.logger.error(`Supabase signedUrl error (path=${path}): ${error?.message}`);
+        throw new BadRequestException(`No se pudo generar el enlace: ${error?.message}`);
+      }
+      return data.signedUrl;
+    } catch (e: any) {
+      if (e instanceof BadRequestException) throw e;
+      this.logger.error(`Storage signedUrl exception: ${e?.message || e}`);
+      throw new BadRequestException(`Error de Storage: ${e?.message || 'desconocido'}`);
+    }
   }
 }
 
