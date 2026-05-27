@@ -8,6 +8,7 @@ import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { Response } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -34,7 +35,13 @@ class StorageService {
         'Configurar en .env (local) o en Render dashboard → Environment (prod).',
       );
     }
-    this.client = createClient(url, key, { auth: { persistSession: false } });
+    this.client = createClient(url, key, {
+      auth: { persistSession: false },
+      // Node 20 no tiene WebSocket nativo (sí Node 22+). supabase-js instancia
+      // el cliente Realtime eagerly y revienta sin esto. Solo usamos Storage
+      // (HTTP), pero hay que pasar el transport igual.
+      realtime: { transport: WebSocket as any },
+    });
     return this.client;
   }
 
