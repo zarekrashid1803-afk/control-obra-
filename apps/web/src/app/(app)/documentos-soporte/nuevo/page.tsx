@@ -1,17 +1,17 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { documentosSoporte, proveedores, frentes, uploadAdjunto, ApiError } from '@/lib/api';
+import { documentosSoporte, proveedores, frentes, ApiError } from '@/lib/api';
 import { fmtCOP } from '@/lib/utils';
+import { PhotoUpload } from '@/components/photo-upload';
 
 const IVA_RATE = 0.19;
 const RETEFUENTE_DEFAULT = 0.025;
 
 export default function NuevoDocSoportePage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [esAdHoc, setEsAdHoc] = useState(true);
@@ -31,12 +31,9 @@ export default function NuevoDocSoportePage() {
   const [aplicaIva, setAplicaIva] = useState(false);
   const [aplicaReteFuente, setAplicaReteFuente] = useState(true);
 
-  // Upload state
+  // Upload state — el preview lo maneja el componente PhotoUpload
   const [adjuntoId, setAdjuntoId] = useState<string>('');
-  const [adjuntoUrl, setAdjuntoUrl] = useState<string>('');
   const [adjuntoNombre, setAdjuntoNombre] = useState<string>('');
-  const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [uploading, setUploading] = useState(false);
 
   // Submit state
   const [submitting, setSubmitting] = useState(false);
@@ -67,27 +64,6 @@ export default function NuevoDocSoportePage() {
       setCiudad(prov.ciudad || 'Cali');
       setTelefono(prov.telefono || '');
       setEmail(prov.email || '');
-    }
-  }
-
-  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const reader = new FileReader();
-      reader.onload = () => setPreviewUrl(reader.result as string);
-      reader.readAsDataURL(file);
-
-      const adj = await uploadAdjunto(file);
-      setAdjuntoId(adj.id);
-      setAdjuntoUrl(adj.urlS3);
-      setAdjuntoNombre(adj.nombre);
-    } catch (err: any) {
-      setError(err?.message || 'Error subiendo archivo');
-    } finally {
-      setUploading(false);
     }
   }
 
@@ -260,44 +236,12 @@ export default function NuevoDocSoportePage() {
 
           {/* Identificación */}
           <Section title="Identificación del proveedor" hint="Foto/PDF de la cédula o RUT — opcional pero recomendado para auditoría">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={onFileSelected}
-              className="hidden"
+            <PhotoUpload
+              current={adjuntoId ? { id: adjuntoId, nombre: adjuntoNombre } : null}
+              onUploaded={(adj) => { setAdjuntoId(adj.id); setAdjuntoNombre(adj.nombre); }}
+              onCleared={() => { setAdjuntoId(''); setAdjuntoNombre(''); }}
+              hint="JPG, PNG, WEBP, HEIC o PDF — máx 10MB"
             />
-            {!adjuntoId ? (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full py-12 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-navy-500 hover:bg-navy-50 transition disabled:opacity-50"
-              >
-                <div className="text-4xl mb-2">📸</div>
-                <div className="text-[14px] font-medium text-navy-900">
-                  {uploading ? 'Subiendo…' : 'Tomar foto o seleccionar archivo'}
-                </div>
-                <div className="text-[12px] text-gray-500 mt-1">JPG, PNG, WEBP, HEIC o PDF — máx 10MB</div>
-              </button>
-            ) : (
-              <div className="flex gap-3 items-center p-3 bg-gray-50 rounded border border-gray-200">
-                {previewUrl ? (
-                  <img src={previewUrl} alt="Identificación" className="w-20 h-20 object-cover rounded border border-gray-300" />
-                ) : (
-                  <div className="w-20 h-20 bg-gray-300 rounded grid place-items-center text-2xl">📄</div>
-                )}
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium">{adjuntoNombre}</div>
-                  <div className="text-[11px] text-gray-500">Subido correctamente</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setAdjuntoId(''); setAdjuntoUrl(''); setPreviewUrl(''); setAdjuntoNombre(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                  className="btn btn-secondary btn-sm"
-                >Quitar</button>
-              </div>
-            )}
           </Section>
         </div>
 
