@@ -151,7 +151,7 @@ export default function NuevaRequisicionPage() {
 
               <Field label="Prioridad">
                 <div className="flex gap-2">
-                  <PrioBtn active={prioridad === 'normal'} onClick={() => setPrioridad('normal')}>📋 Normal</PrioBtn>
+                  <PrioBtn active={prioridad === 'normal'} onClick={() => setPrioridad('normal')}>📋 A tiempo</PrioBtn>
                   <PrioBtn active={prioridad === 'urgente'} onClick={() => setPrioridad('urgente')} danger>🔥 Urgente</PrioBtn>
                 </div>
               </Field>
