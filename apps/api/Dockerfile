@@ -48,6 +48,10 @@ ENV NODE_ENV=production
 
 # Copiar solo node_modules y dist necesarios
 COPY --from=builder /repo/node_modules ./node_modules
+# Algunos deps del workspace NO se hoistean a la raíz (ej. otplib por conflicto
+# de versiones de su sub-dependencia). Copiar también los node_modules locales
+# del workspace para que estén disponibles en runtime.
+COPY --from=builder /repo/apps/api/node_modules ./node_modules
 COPY --from=builder /repo/packages/shared/dist ./node_modules/@control-obra/shared/dist
 COPY --from=builder /repo/packages/shared/package.json ./node_modules/@control-obra/shared/package.json
 COPY --from=builder /repo/apps/api/dist ./dist
