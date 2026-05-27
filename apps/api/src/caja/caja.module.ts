@@ -14,7 +14,7 @@ import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorat
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 
 @Injectable()
-class CajaService {
+export class CajaService {
   constructor(private prisma: PrismaService) {}
 
   async listMovimientos(p: { page: number; pageSize: number }, tenantId: number) {
