@@ -9,12 +9,36 @@ import { extname } from 'path';
 import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
-import { Public } from '../common/decorators/public.decorator';
 import * as crypto from 'crypto';
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
 const MAX_SIZE_MB = 10;
 const SIGNED_URL_TTL_SEC = 3600; // 1 hora
+
+/**
+ * Detecta el tipo real por los "magic bytes" del contenido, NO por el mimetype
+ * que envía el cliente (que es trivial de falsificar). Devuelve el mime
+ * detectado o null si no es uno de los formatos permitidos.
+ */
+export function sniffMime(buf: Buffer): string | null {
+  if (!buf || buf.length < 12) return null;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  // PNG: 89 50 4E 47
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+  // PDF: %PDF
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return 'application/pdf';
+  // WEBP: "RIFF"...."WEBP"
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  // HEIC/HEIF (ISO-BMFF): bytes 4-7 = "ftyp", marca en 8-11
+  if (buf.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = buf.toString('ascii', 8, 12);
+    if (['heic', 'heix', 'hevc', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1'].includes(brand)) {
+      return 'image/heic';
+    }
+  }
+  return null;
+}
 
 @Injectable()
 class StorageService {
@@ -100,23 +124,28 @@ class AdjuntosService {
   constructor(private prisma: PrismaService, private storage: StorageService) {}
 
   async crear(file: Express.Multer.File, meta: { entidad: string; entidadId?: string }, user: AuthUser) {
-    if (!ALLOWED_MIME.includes(file.mimetype)) {
-      throw new BadRequestException(`Tipo de archivo no permitido: ${file.mimetype}`);
+    // Validar por CONTENIDO real (magic bytes), no por el mimetype del cliente.
+    const realMime = sniffMime(file.buffer);
+    if (!realMime || !ALLOWED_MIME.includes(realMime)) {
+      throw new BadRequestException(
+        'El archivo no es una imagen (JPG/PNG/WEBP/HEIC) ni un PDF válido.',
+      );
     }
     const id = crypto.randomUUID();
     const ext = extname(file.originalname) || '';
     const storagePath = `${meta.entidad || 'generico'}/${id}${ext}`;
 
-    await this.storage.upload(file.buffer, storagePath, file.mimetype);
+    await this.storage.upload(file.buffer, storagePath, realMime);
 
     const checksum = crypto.createHash('sha256').update(file.buffer).digest('hex');
 
     return this.prisma.adjunto.create({
       data: {
+        tenantId: user.tenantId,
         nombre: file.originalname,
-        mimeType: file.mimetype,
+        mimeType: realMime,
         tamanioBytes: file.size,
-        // urlS3 guarda el path de Supabase Storage. El frontend llama a /adjuntos/file/:id y el backend redirige a la signed URL.
+        // urlS3 guarda el path de Supabase Storage. El frontend pide la signed URL vía /adjuntos/:id/url.
         urlS3: storagePath,
         checksumSha256: checksum,
         entidad: meta.entidad || 'generico',
@@ -158,15 +187,29 @@ class AdjuntosController {
   }
 
   /**
-   * Sirve el archivo: genera signed URL de Supabase y hace 302 redirect.
-   * El archivo va directo Supabase→cliente, sin pasar por el backend (ahorra egress).
-   * Público porque el id es UUID no enumerable + la signed URL expira en 1h.
+   * Devuelve una signed URL temporal (1h) para mostrar/descargar el archivo.
+   * Autenticado y con verificación de tenant: solo se puede obtener el enlace
+   * de un adjunto de la propia empresa. Cierra la fuga cross-tenant que existía
+   * cuando este recurso era @Public() y se servía por UUID.
    */
-  @Public()
-  @Get('file/:id')
-  async serve(@Param('id') id: string, @Res() res: Response) {
+  @Get(':id/url')
+  @ApiOperation({ summary: 'Obtener signed URL temporal del adjunto (mismo tenant)' })
+  async getUrl(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     const adj = await this.prisma.adjunto.findUnique({ where: { id } });
-    if (!adj) return res.status(404).send('Not found');
+    // 404 (no 403) para no revelar si el id existe en otro tenant.
+    if (!adj || adj.tenantId !== user.tenantId) throw new BadRequestException('Adjunto no encontrado');
+    const url = await this.storage.signedUrl(adj.urlS3);
+    return { url, nombre: adj.nombre, mimeType: adj.mimeType };
+  }
+
+  /**
+   * Variante que hace 302 redirect a la signed URL (para descargas vía fetch).
+   * También autenticado + tenant-scoped.
+   */
+  @Get('file/:id')
+  async serve(@Param('id') id: string, @CurrentUser() user: AuthUser, @Res() res: Response) {
+    const adj = await this.prisma.adjunto.findUnique({ where: { id } });
+    if (!adj || adj.tenantId !== user.tenantId) return res.status(404).send('Not found');
     const url = await this.storage.signedUrl(adj.urlS3);
     return res.redirect(302, url);
   }

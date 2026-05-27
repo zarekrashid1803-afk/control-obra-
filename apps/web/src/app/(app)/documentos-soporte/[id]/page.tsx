@@ -3,7 +3,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { documentosSoporte } from '@/lib/api';
+import { documentosSoporte, adjuntos } from '@/lib/api';
 import { fmtCOP, fmtDate } from '@/lib/utils';
 
 const ESTADO_STYLES: Record<string, string> = {
@@ -11,8 +11,6 @@ const ESTADO_STYLES: Record<string, string> = {
   emitido: 'badge-aprobada',
   anulado: 'badge-rechazada',
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001';
 
 export default function DetalleDocSoportePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -22,6 +20,15 @@ export default function DetalleDocSoportePage({ params }: { params: Promise<{ id
   const q = useQuery({
     queryKey: ['documento-soporte', id],
     queryFn: () => documentosSoporte.get(id),
+  });
+
+  // Signed URL del adjunto: la pedimos autenticada (verificada por tenant en
+  // el backend). Query dependiente: solo corre cuando ya conocemos el id.
+  const adjId = (q.data as any)?.identificacionAdjunto?.id as string | undefined;
+  const adjUrlQ = useQuery({
+    queryKey: ['adjunto-url', adjId],
+    queryFn: () => adjuntos.signedUrl(adjId!),
+    enabled: !!adjId,
   });
 
   const emitir = useMutation({
@@ -40,7 +47,7 @@ export default function DetalleDocSoportePage({ params }: { params: Promise<{ id
   if (!d) return null;
 
   const adj = (d as any).identificacionAdjunto;
-  const adjUrl = adj?.urlS3 ? `${API_BASE}/api/v1${adj.urlS3}` : null;
+  const adjUrl = adjUrlQ.data?.url ?? null;
   const isImage = adj?.mimeType?.startsWith('image/');
 
   return (
@@ -106,12 +113,16 @@ export default function DetalleDocSoportePage({ params }: { params: Promise<{ id
                 <div className="text-[14px] font-semibold text-navy-900">Identificación del proveedor</div>
               </div>
               <div className="p-4">
-                {isImage && adjUrl ? (
+                {adjUrlQ.isLoading ? (
+                  <div className="text-[12px] text-gray-500">Cargando archivo…</div>
+                ) : adjUrlQ.isError || !adjUrl ? (
+                  <div className="text-[12px] text-red-700">No se pudo cargar el archivo.</div>
+                ) : isImage ? (
                   <a href={adjUrl} target="_blank" rel="noopener">
                     <img src={adjUrl} alt={adj.nombre} className="max-w-full rounded border border-gray-200" />
                   </a>
                 ) : (
-                  <a href={adjUrl!} target="_blank" rel="noopener" className="btn btn-secondary">
+                  <a href={adjUrl} target="_blank" rel="noopener" className="btn btn-secondary">
                     📄 Ver archivo: {adj.nombre}
                   </a>
                 )}

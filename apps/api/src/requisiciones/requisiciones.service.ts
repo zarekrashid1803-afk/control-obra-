@@ -188,12 +188,20 @@ export class RequisicionesService {
       updatedData.fechaCierre = new Date();
     }
 
-    // Transacción atómica: actualizar estado + insertar historial + observación opcional
+    // Transacción atómica: actualizar estado + insertar historial + observación opcional.
     const updated = await this.prisma.$transaction(async (tx) => {
-      const upd = await tx.requisicion.update({
-        where: { id },
+      // Optimistic lock: el WHERE incluye el estado que leímos. Si entre el read
+      // y este write otra request ya cambió el estado, count === 0 y abortamos.
+      // Evita doble aprobación / doble recepción por clics o requests concurrentes.
+      const { count } = await tx.requisicion.updateMany({
+        where: { id, estado: r.estado },
         data: updatedData,
       });
+      if (count === 0) {
+        throw new ConflictException(
+          'La requisición ya cambió de estado en otra operación. Recárgala e intenta de nuevo.',
+        );
+      }
       await tx.requisicionEstadoHistorial.create({
         data: {
           requisicionId: id,
@@ -208,7 +216,7 @@ export class RequisicionesService {
           data: { requisicionId: id, autorId: user.id, texto: input.observacion },
         });
       }
-      return upd;
+      return tx.requisicion.findUniqueOrThrow({ where: { id } });
     });
 
     // Notificaciones fire-and-forget — no bloquear la respuesta del endpoint.

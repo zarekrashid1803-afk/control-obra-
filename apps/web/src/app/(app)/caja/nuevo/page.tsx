@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +20,12 @@ export default function NuevoMovimientoCajaPage() {
   const [aplicaReteFuente, setAplicaReteFuente] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Key de idempotencia ESTABLE por montaje del formulario. Así un doble-click
+  // o un reintento de red reusan la misma key → el backend no duplica el
+  // movimiento. Se regenera solo al volver a entrar al formulario.
+  const idempotencyKey = useRef(
+    `caja-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  ).current;
 
   const monto = Number(montoPesos.replace(/[^0-9.]/g, '')) || 0;
   const reteFuente = aplicaReteFuente && tipo === 'salida' ? Math.round(monto * 0.025) : 0;
@@ -36,7 +42,6 @@ export default function NuevoMovimientoCajaPage() {
     }
     setSubmitting(true);
     try {
-      const idempotencyKey = `caja-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await caja.crearMovimiento({
         tipo,
         concepto,

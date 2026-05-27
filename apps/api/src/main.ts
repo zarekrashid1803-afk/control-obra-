@@ -9,7 +9,23 @@ import { AppModule } from './app.module';
   return this.toString();
 };
 
+// Fail-fast: en producción NUNCA arrancar con un JWT_SECRET ausente o con el
+// default de desarrollo. Sin esto, un deploy sin la env var firmaría tokens
+// con un secreto conocido → cualquiera podría falsificar sesiones.
+function assertProductionSecrets() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32 || secret === 'dev-secret-change-me') {
+    throw new Error(
+      'JWT_SECRET ausente, demasiado corto (<32) o usando el default de dev. ' +
+        'Configurar un secreto fuerte en las env vars de producción antes de arrancar.',
+    );
+  }
+}
+
 async function bootstrap() {
+  assertProductionSecrets();
+
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
@@ -39,15 +55,19 @@ async function bootstrap() {
 
   // Validación: usamos ZodValidationPipe per-route, no necesitamos ValidationPipe global
 
-  // Swagger / OpenAPI
-  const config = new DocumentBuilder()
-    .setTitle('Control de Obra · API')
-    .setDescription('Sistema Integral de Gestión y Control de Obra')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-  const doc = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup(`${prefix}/docs`, app, doc);
+  // Swagger / OpenAPI — solo fuera de producción. En prod exponer el mapa
+  // completo de la API (todos los endpoints y schemas) es regalarle
+  // reconocimiento a un atacante. Habilitable con ENABLE_SWAGGER=true si hace falta.
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
+    const config = new DocumentBuilder()
+      .setTitle('Control de Obra · API')
+      .setDescription('Sistema Integral de Gestión y Control de Obra')
+      .setVersion('0.1.0')
+      .addBearerAuth()
+      .build();
+    const doc = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup(`${prefix}/docs`, app, doc);
+  }
 
   // Puerto: Render usa env PORT. Fallback API_PORT para compatibilidad local.
   const port = Number(process.env.PORT) || Number(process.env.API_PORT) || 3001;

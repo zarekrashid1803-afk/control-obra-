@@ -297,6 +297,12 @@ export const auditoria = {
   },
 };
 
+export const adjuntos = {
+  // Signed URL temporal (1h) del adjunto. Autenticado + verificado por tenant
+  // en el backend: solo devuelve enlace si el adjunto es de tu empresa.
+  signedUrl: (id: string) => api<{ url: string; nombre: string; mimeType: string }>(`/adjuntos/${id}/url`),
+};
+
 /**
  * Descarga un archivo binario (Excel, PDF) del API y dispara el download.
  */

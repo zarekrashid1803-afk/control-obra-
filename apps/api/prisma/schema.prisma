@@ -42,6 +42,7 @@ model Tenant {
   configuracion  Configuracion[]
   auditLogs      AuditLog[]
   promoCodes     PromoCode[]
+  adjuntos       Adjunto[]
   sector         Sector?       @relation(fields: [sectorId], references: [id])
 
   @@map("tenant")
@@ -582,6 +583,7 @@ model InventarioFrente {
 
 model Adjunto {
   id              String   @id @default(uuid())
+  tenantId        Int      @map("tenant_id")
   nombre          String
   mimeType        String   @map("mime_type")
   tamanioBytes    Int      @map("tamanio_bytes")
@@ -592,6 +594,9 @@ model Adjunto {
   subidoPorId     String   @map("subido_por_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
   @@index([entidad, entidadId])
   @@map("adjunto")
 }

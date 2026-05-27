@@ -14,7 +14,9 @@ export const createMovimientoCajaSchema = z.object({
   retencionIvaCentavos: moneyCentavosSchema.optional(),
   retencionIcaCentavos: moneyCentavosSchema.optional(),
   soporteAdjuntoId: idSchema.optional(),
-  idempotencyKey: z.string().min(8).optional(),
+  // Obligatorio: dedup contra doble-submit / reintentos de red. El cliente
+  // genera una key estable por formulario; el backend ignora duplicados.
+  idempotencyKey: z.string().min(8),
 });
 export type CreateMovimientoCajaInput = z.infer<typeof createMovimientoCajaSchema>;
 
