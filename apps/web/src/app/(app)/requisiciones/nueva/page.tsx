@@ -75,8 +75,10 @@ export default function NuevaRequisicionPage() {
     setError(null);
     if (!frenteId) return setError('Selecciona un frente');
     if (!descripcion || descripcion.length < 3) return setError('Describe brevemente la requisición');
-    const validItems = items.filter(it => it.descripcion && it.cantidad > 0 && Number(it.precioUnitarioCentavos) > 0);
-    if (validItems.length === 0) return setError('Agrega al menos un item con descripción, cantidad y precio');
+    // El precio es opcional (Compras lo define al cotizar): solo se exige
+    // descripción y cantidad.
+    const validItems = items.filter(it => it.descripcion && it.cantidad > 0);
+    if (validItems.length === 0) return setError('Agrega al menos un item con descripción y cantidad');
 
     setSubmitting(true);
     try {
@@ -217,7 +219,7 @@ export default function NuevaRequisicionPage() {
                         value={Number(it.precioUnitarioCentavos) / 100}
                         onChange={(e) => updateItem(it.id, { precioUnitarioCentavos: BigInt(Math.round(Number(e.target.value) * 100)) })}
                         className="input bg-white text-right font-mono"
-                        placeholder="Precio unit. COP"
+                        placeholder="Precio (opcional)"
                         min="0"
                       />
                       <div className="text-right tabular-nums font-medium text-navy-900 px-2">

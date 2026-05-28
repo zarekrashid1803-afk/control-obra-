@@ -7,7 +7,9 @@ export const requisicionItemInputSchema = z.object({
   descripcion: z.string().min(2),
   unidad: z.enum(UNIDADES),
   cantidad: z.coerce.number().positive(),
-  precioUnitarioCentavos: moneyCentavosSchema,
+  // Precio OPCIONAL: una requisición es un pedido; el precio lo define Compras
+  // al cotizar. Por defecto 0 → la requisición queda con total $0 hasta la OC.
+  precioUnitarioCentavos: moneyCentavosSchema.optional().default(0n as any),
   notas: z.string().optional(),
 });
 export type RequisicionItemInput = z.infer<typeof requisicionItemInputSchema>;

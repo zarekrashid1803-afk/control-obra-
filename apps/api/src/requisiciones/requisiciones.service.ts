@@ -100,14 +100,16 @@ export class RequisicionesService {
 
     // Snapshot precios y calcular subtotales
     const itemsData = input.items.map((it, idx) => {
-      const subtotal = BigInt(Math.round(it.cantidad * Number(it.precioUnitarioCentavos)));
+      // Precio opcional: si no viene, 0 (Compras lo define al cotizar).
+      const precio = it.precioUnitarioCentavos ?? 0n;
+      const subtotal = BigInt(Math.round(it.cantidad * Number(precio)));
       return {
         orden: idx,
         materialId: it.materialId || null,
         descripcionSnapshot: it.descripcion,
         unidadSnapshot: it.unidad,
         cantidad: it.cantidad,
-        precioUnitarioCentavosSnapshot: it.precioUnitarioCentavos,
+        precioUnitarioCentavosSnapshot: precio,
         subtotalCentavos: subtotal,
         notas: it.notas,
       };
