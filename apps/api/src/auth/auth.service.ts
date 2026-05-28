@@ -10,6 +10,7 @@ import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginInput, ChangePasswordInput } from '@control-obra/shared';
+import { encryptSecret, decryptSecret } from './crypto.util';
 
 @Injectable()
 export class AuthService {
@@ -40,7 +41,7 @@ export class AuthService {
         throw new UnauthorizedException({ error: 'MFA_REQUIRED', message: 'Se requiere código de verificación' });
       }
       const ok2fa = user.mfaSecret
-        ? authenticator.verify({ token: input.mfaCode, secret: user.mfaSecret })
+        ? authenticator.verify({ token: input.mfaCode, secret: decryptSecret(user.mfaSecret) })
         : false;
       if (!ok2fa) {
         throw new UnauthorizedException({ error: 'MFA_INVALID', message: 'Código de verificación inválido' });
@@ -53,15 +54,15 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
-    const refreshToken = crypto.randomBytes(48).toString('hex');
-    const refreshHash = await argon2.hash(refreshToken);
+    const { token: refreshToken, selector, secretHash } = await this.issueRefreshToken();
     const expiraAt = new Date();
     expiraAt.setDate(expiraAt.getDate() + 30);
 
     await this.prisma.sesion.create({
       data: {
         usuarioId: user.id,
-        refreshTokenHash: refreshHash,
+        selector,
+        refreshTokenHash: secretHash,
         ip: meta.ip,
         userAgent: meta.userAgent,
         expiraAt,
@@ -116,23 +117,61 @@ export class AuthService {
     return { ok: true };
   }
 
+  /** Genera un refresh token "selector.secret" y el hash del secreto. */
+  private async issueRefreshToken() {
+    const selector = crypto.randomBytes(12).toString('hex');
+    const secret = crypto.randomBytes(48).toString('hex');
+    const secretHash = await argon2.hash(secret);
+    return { token: `${selector}.${secret}`, selector, secretHash };
+  }
+
   async refresh(refreshToken: string) {
-    // Find candidate sessions and verify hash (argon2 verify is the bottleneck)
-    const candidates = await this.prisma.sesion.findMany({
-      where: { revocadoAt: null, expiraAt: { gt: new Date() } },
-      orderBy: { emitidoAt: 'desc' },
-      take: 100,
+    const [selector, secret] = (refreshToken || '').split('.');
+    if (!selector || !secret) throw new UnauthorizedException('Refresh token inválido');
+
+    // Lookup O(1) por selector (índice único) — sin iterar argon2.
+    const session = await this.prisma.sesion.findUnique({
+      where: { selector },
       include: { usuario: { include: { roles: true } } },
     });
-
-    let session: (typeof candidates)[number] | null = null;
-    for (const c of candidates) {
-      if (await argon2.verify(c.refreshTokenHash, refreshToken)) {
-        session = c;
-        break;
-      }
-    }
     if (!session) throw new UnauthorizedException('Refresh token inválido');
+
+    const secretOk = await argon2.verify(session.refreshTokenHash, secret);
+    if (!secretOk) throw new UnauthorizedException('Refresh token inválido');
+
+    // Detección de reuso: secreto válido pero sesión ya revocada/vencida →
+    // señal de token robado o rotado dos veces. Revocar TODAS las sesiones del
+    // usuario y rechazar (el atacante y el legítimo deben re-loguear).
+    if (session.revocadoAt || session.expiraAt < new Date()) {
+      await this.prisma.sesion.updateMany({
+        where: { usuarioId: session.usuarioId, revocadoAt: null },
+        data: { revocadoAt: new Date() },
+      });
+      throw new UnauthorizedException('Sesión inválida. Vuelve a iniciar sesión.');
+    }
+
+    if (!session.usuario.activo || session.usuario.deletedAt) {
+      throw new UnauthorizedException('Usuario inválido');
+    }
+
+    // Rotación: revocar la sesión actual y emitir una nueva. Un refresh token
+    // robado solo sirve hasta el próximo refresh del usuario legítimo.
+    const { token: newRefreshToken, selector: newSelector, secretHash } = await this.issueRefreshToken();
+    const expiraAt = new Date();
+    expiraAt.setDate(expiraAt.getDate() + 30);
+    await this.prisma.$transaction([
+      this.prisma.sesion.update({ where: { id: session.id }, data: { revocadoAt: new Date() } }),
+      this.prisma.sesion.create({
+        data: {
+          usuarioId: session.usuarioId,
+          selector: newSelector,
+          refreshTokenHash: secretHash,
+          ip: session.ip,
+          userAgent: session.userAgent,
+          expiraAt,
+        },
+      }),
+    ]);
 
     const accessToken = await this.jwt.signAsync({
       sub: session.usuario.id,
@@ -142,6 +181,7 @@ export class AuthService {
 
     return {
       accessToken,
+      refreshToken: newRefreshToken,
       expiresIn: 15 * 60,
     };
   }
@@ -171,10 +211,11 @@ export class AuthService {
     const otpauth = authenticator.keyuri(user.email, 'Control de Obra', secret);
     const qrDataUrl = await QRCode.toDataURL(otpauth);
 
-    // Guardamos el secreto pero NO habilitamos hasta que confirme con un código válido
+    // Guardamos el secreto CIFRADO pero NO habilitamos hasta que confirme con
+    // un código válido. Si la DB se filtra, el secreto TOTP no queda expuesto.
     await this.prisma.usuario.update({
       where: { id: userId },
-      data: { mfaSecret: secret },
+      data: { mfaSecret: encryptSecret(secret) },
     });
 
     return { secret, otpauthUrl: otpauth, qrDataUrl };
@@ -186,7 +227,7 @@ export class AuthService {
     if (!user?.mfaSecret) {
       throw new BadRequestException('Primero genera el código QR (setup)');
     }
-    const ok = authenticator.verify({ token: code, secret: user.mfaSecret });
+    const ok = authenticator.verify({ token: code, secret: decryptSecret(user.mfaSecret) });
     if (!ok) throw new BadRequestException('Código inválido. Verifica la hora de tu dispositivo.');
 
     await this.prisma.usuario.update({ where: { id: userId }, data: { mfaEnabled: true } });
@@ -199,7 +240,7 @@ export class AuthService {
     if (!user?.mfaEnabled || !user.mfaSecret) {
       throw new BadRequestException('MFA no está activo');
     }
-    const ok = authenticator.verify({ token: code, secret: user.mfaSecret });
+    const ok = authenticator.verify({ token: code, secret: decryptSecret(user.mfaSecret) });
     if (!ok) throw new BadRequestException('Código inválido');
 
     await this.prisma.usuario.update({

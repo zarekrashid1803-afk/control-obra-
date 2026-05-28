@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
@@ -26,6 +26,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -43,7 +44,18 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
           process.env.LOG_PRETTY === 'true'
             ? { target: 'pino-pretty', options: { singleLine: true } }
             : undefined,
-        redact: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.passwordHash'],
+        redact: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          '*.password',
+          '*.passwordHash',
+          '*.currentPassword',
+          '*.newPassword',
+          '*.refreshToken',
+          '*.accessToken',
+          '*.mfaSecret',
+          '*.mfaCode',
+        ],
       },
     }),
 
@@ -67,6 +79,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     TenantModule,
   ],
   providers: [
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

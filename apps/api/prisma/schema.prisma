@@ -157,6 +157,10 @@ model UsuarioRol {
 model Sesion {
   id              String   @id @default(uuid())
   usuarioId       String   @map("usuario_id")
+  // selector: parte pública del refresh token (token = "selector.secret").
+  // Permite buscar la sesión en O(1) en vez de iterar y verificar argon2 sobre
+  // hasta 100 sesiones (que además truncaba sesiones válidas a escala).
+  selector        String?  @unique
   refreshTokenHash String  @map("refresh_token_hash")
   ip              String?
   userAgent       String?  @map("user_agent")

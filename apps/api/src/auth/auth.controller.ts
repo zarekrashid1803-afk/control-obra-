@@ -78,6 +78,9 @@ export class AuthController {
     return this.auth.mfaSetup(user.id);
   }
 
+  // Rate-limit estricto: verificar un código de 6 dígitos no debe poder
+  // brute-forcearse. 10 intentos/min por IP.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('mfa/enable')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verificar primer código y activar 2FA' })
@@ -86,6 +89,7 @@ export class AuthController {
     return this.auth.mfaEnable(user.id, body.code);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('mfa/disable')
   @HttpCode(200)
   @ApiOperation({ summary: 'Desactivar 2FA (requiere código)' })

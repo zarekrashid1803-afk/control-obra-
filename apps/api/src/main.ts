@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 // BigInt serialization in JSON responses
@@ -28,6 +29,11 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
+
+  // Headers de seguridad (HSTS, X-Content-Type-Options, noSniff, etc.).
+  // crossOriginResourcePolicy desactivado: la API responde a un front en otro
+  // origen (Vercel) y el CORS ya controla qué orígenes pueden leer.
+  app.use(helmet({ crossOriginResourcePolicy: false }));
 
   const prefix = process.env.API_PREFIX || '/api/v1';
   app.setGlobalPrefix(prefix);

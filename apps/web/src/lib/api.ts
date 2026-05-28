@@ -90,6 +90,9 @@ async function tryRefresh(): Promise<boolean> {
     if (!res.ok) return false;
     const data = await res.json();
     setToken(data.accessToken);
+    // El backend rota el refresh token en cada uso: persistir el nuevo, o el
+    // siguiente refresh fallaría (el anterior queda revocado).
+    if (data.refreshToken) setRefreshToken(data.refreshToken);
     return true;
   } catch {
     return false;
