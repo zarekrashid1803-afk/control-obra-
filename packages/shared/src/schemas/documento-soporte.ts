@@ -25,7 +25,7 @@ export const createDocumentoSoporteSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
 
   // Servicio
-  servicioPrestado: z.string().min(5, { message: 'Describe el servicio prestado' }),
+  servicioPrestado: z.string().min(3, { message: 'Describe el servicio prestado (mínimo 3 caracteres)' }),
   frenteId: idSchema.optional().nullable(),
   fechaDocumento: z.coerce.date(),
   formaPago: formaPagoSchema.default('transferencia'),
