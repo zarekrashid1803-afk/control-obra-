@@ -100,8 +100,19 @@ export default function NuevoDocSoportePage() {
       router.push(`/documentos-soporte/${created.id}`);
     } catch (err) {
       if (err instanceof ApiError) {
-        const msg = (err.body as any)?.message || err.message;
-        setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        const body = err.body as any;
+        // Errores de validación Zod traen un array {path, message}: mostrarlos
+        // campo por campo en vez del genérico "Validación falló".
+        if (Array.isArray(body?.errors) && body.errors.length) {
+          setError(
+            body.errors
+              .map((e: any) => (e.path ? `${e.path}: ${e.message}` : e.message))
+              .join(' · '),
+          );
+        } else {
+          const msg = body?.message || err.message;
+          setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        }
       } else {
         setError('Error al guardar');
       }
