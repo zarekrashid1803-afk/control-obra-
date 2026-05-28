@@ -219,12 +219,17 @@ export class PromoCodesService {
       email: result.user.email,
       tenantId: result.tenant.id,
     });
-    const refreshToken = crypto.randomBytes(48).toString('hex');
-    const refreshHash = await argon2.hash(refreshToken);
+    // Refresh token con el MISMO formato "selector.secret" que usa /auth/login,
+    // o el endpoint /auth/refresh (que busca por selector) no lo reconocería y
+    // el usuario recién registrado quedaría sin poder renovar sesión.
+    const selector = crypto.randomBytes(12).toString('hex');
+    const secret = crypto.randomBytes(48).toString('hex');
+    const refreshToken = `${selector}.${secret}`;
+    const refreshHash = await argon2.hash(secret);
     const expiraAt = new Date();
     expiraAt.setDate(expiraAt.getDate() + 30);
     await this.prisma.sesion.create({
-      data: { usuarioId: result.user.id, refreshTokenHash: refreshHash, expiraAt },
+      data: { usuarioId: result.user.id, selector, refreshTokenHash: refreshHash, expiraAt },
     });
 
     return {

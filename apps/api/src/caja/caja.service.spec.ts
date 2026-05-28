@@ -1,4 +1,5 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { authenticator } from 'otplib';
 import { CajaService } from './caja.module';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 
@@ -189,5 +190,48 @@ describe('CajaService.cerrarArqueo — aritmética del saldo', () => {
       ConflictException,
     );
     expect(prisma.arqueoCaja.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('CajaService.cerrarArqueo — verificación 2FA', () => {
+  const SECRET = authenticator.generateSecret();
+
+  function prismaConMfa() {
+    const prisma = makePrisma();
+    prisma.usuario.findUnique.mockResolvedValue({ mfaEnabled: true, mfaSecret: SECRET });
+    prisma.arqueoCaja.findUnique.mockResolvedValue(null);
+    prisma.arqueoCaja.findFirst.mockResolvedValue(null);
+    prisma.movimientoCaja.findMany.mockResolvedValue([]);
+    prisma.arqueoCaja.upsert.mockImplementation(({ create }: any) => ({ id: 'arq', ...create }));
+    return prisma;
+  }
+
+  it('si el usuario tiene 2FA activo y no manda código → rechaza', async () => {
+    const prisma = prismaConMfa();
+    const svc = new CajaService(prisma);
+    await expect(
+      svc.cerrarArqueo({ fecha: '2026-05-27', saldoRealCentavos: 0n } as any, USER),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.arqueoCaja.upsert).not.toHaveBeenCalled();
+  });
+
+  it('si el código TOTP es inválido → rechaza', async () => {
+    const prisma = prismaConMfa();
+    const svc = new CajaService(prisma);
+    await expect(
+      svc.cerrarArqueo({ fecha: '2026-05-27', saldoRealCentavos: 0n, mfaCode: '000000' } as any, USER),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('con el código TOTP válido → cierra el arqueo', async () => {
+    const prisma = prismaConMfa();
+    const svc = new CajaService(prisma);
+    const token = authenticator.generate(SECRET);
+    const r: any = await svc.cerrarArqueo(
+      { fecha: '2026-05-27', saldoRealCentavos: 0n, mfaCode: token } as any,
+      USER,
+    );
+    expect(r.id).toBe('arq');
+    expect(prisma.arqueoCaja.upsert).toHaveBeenCalled();
   });
 });

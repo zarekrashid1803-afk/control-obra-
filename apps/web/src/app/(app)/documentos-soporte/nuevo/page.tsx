@@ -309,7 +309,7 @@ export default function NuevoDocSoportePage() {
               {submitting ? 'Emitiendo…' : '✓ Guardar y emitir'}
             </button>
             <div className="text-[11px] text-gray-600 mt-2">
-              Al <strong>emitir</strong> se genera el código CUDS y el documento queda como soporte contable definitivo.
+              Al <strong>emitir</strong> se registra el documento con un CUDS interno como soporte contable. ⚠️ Aún <strong>no se transmite a la DIAN</strong> (integración próximamente).
             </div>
           </div>
         </div>

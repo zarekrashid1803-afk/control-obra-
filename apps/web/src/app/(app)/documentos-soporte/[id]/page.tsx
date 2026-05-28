@@ -158,7 +158,7 @@ export default function DetalleDocSoportePage({ params }: { params: Promise<{ id
               >
                 {emitir.isPending ? 'Emitiendo…' : '✓ Emitir documento'}
               </button>
-              <div className="text-[11px] text-gray-600">Al emitir se genera el código CUDS y el documento queda como soporte contable definitivo.</div>
+              <div className="text-[11px] text-gray-600">Al emitir se registra el documento con un CUDS interno como soporte contable. ⚠️ Aún <strong>no se transmite a la DIAN</strong> (integración próximamente).</div>
             </div>
           )}
 

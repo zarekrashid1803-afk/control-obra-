@@ -10,6 +10,7 @@ import type { GenerarOCInput } from '@control-obra/shared';
 import { RequisicionesService } from '../requisiciones/requisiciones.service';
 import { EmailService } from '../notifications/notifications.module';
 import { generarOCPdf } from './oc-pdf';
+import { aplicarDescuento } from './oc-math';
 
 const IVA = 0.19;
 
@@ -138,11 +139,7 @@ export class OrdenesCompraService {
 
     const itemsData = input.items.map((it, idx) => {
       const sinDesc = BigInt(Math.round(it.cantidad * Number(it.precioUnitarioCentavos)));
-      // descuentoPct es un porcentaje (ej. 10 = 10%). Aplicamos (1 - pct/100)
-      // en aritmética entera con base 10000 (pct*100 → puntos básicos).
-      // Antes: (100 - pct*100)/100 daba negativo para cualquier descuento > 0.
-      const factorBps = 10000 - Math.round(it.descuentoPct * 100); // 10% → 9000
-      const subtotal = (sinDesc * BigInt(Math.max(0, factorBps))) / 10000n;
+      const subtotal = aplicarDescuento(sinDesc, it.descuentoPct);
       return {
         orden: idx,
         materialId: it.materialId,
