@@ -1,5 +1,7 @@
 import { Injectable, Logger, Module } from '@nestjs/common';
 import { Resend } from 'resend';
+import * as crypto from 'crypto';
+import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://control-obra-web.vercel.app';
@@ -182,6 +184,36 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Crea un token de verificación de correo y envía el email. Fire-and-forget:
+   * si no hay RESEND_API_KEY el envío se omite (no rompe el registro).
+   */
+  async crearYEnviarVerificacion(usuarioId: string, email: string, nombre: string): Promise<void> {
+    try {
+      // Invalidar tokens previos no usados.
+      await this.prisma.verificacionEmail.updateMany({
+        where: { usuarioId, usadoAt: null },
+        data: { usadoAt: new Date() },
+      });
+      const selector = crypto.randomBytes(12).toString('hex');
+      const secret = crypto.randomBytes(32).toString('hex');
+      const tokenHash = await argon2.hash(secret);
+      const expiraAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+      await this.prisma.verificacionEmail.create({
+        data: { usuarioId, selector, tokenHash, expiraAt },
+      });
+      const frontendUrl = process.env.FRONTEND_URL || 'https://control-obra-web.vercel.app';
+      const link = `${frontendUrl}/verify-email?token=${selector}.${secret}`;
+      await this.email.send({
+        to: email,
+        subject: '[Control de Obra] Verifica tu correo',
+        html: this.tplVerificacion({ nombre, link }),
+      });
+    } catch (e: any) {
+      this.logger.error(`crearYEnviarVerificacion falló: ${e?.message || e}`);
+    }
+  }
+
   /** Email con el enlace para restablecer la contraseña. */
   async enviarResetPassword(email: string, nombre: string, link: string): Promise<void> {
     await this.email
@@ -196,6 +228,28 @@ export class NotificationsService {
   // ============================================================
   // Templates HTML — minimalistas, inline styles para max compatibilidad
   // ============================================================
+  private tplVerificacion(d: { nombre: string; link: string }): string {
+    return `
+<div style="font-family:Inter,Arial,sans-serif;background:#f5f6f7;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#000;color:#fff;padding:20px 24px;">
+      <div style="font-size:11px;letter-spacing:2px;opacity:0.7;">CONTROL DE OBRA</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px;">Verifica tu correo</div>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px 0;">Hola ${this.escape(d.nombre)},</p>
+      <p style="margin:0 0 16px 0;">Confirma tu correo para activar todas las funciones de tu cuenta. El enlace expira en <strong>24 horas</strong>.</p>
+      <div style="margin-top:24px;">
+        <a href="${d.link}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Verificar mi correo →</a>
+      </div>
+    </div>
+    <div style="padding:16px 24px;background:#f5f6f7;font-size:11px;color:#686B6C;text-align:center;">
+      Project by Orion · No respondas a este email.
+    </div>
+  </div>
+</div>`;
+  }
+
   private tplResetPassword(d: { nombre: string; link: string }): string {
     return `
 <div style="font-family:Inter,Arial,sans-serif;background:#f5f6f7;padding:24px;color:#1a1a1a;">

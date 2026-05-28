@@ -108,6 +108,8 @@ model Usuario {
   iniciales                String
   passwordHash             String    @map("password_hash")
   passwordChangeRequired   Boolean   @default(true) @map("password_change_required")
+  emailVerificado          Boolean   @default(false) @map("email_verificado")
+  emailVerificadoAt        DateTime? @map("email_verificado_at")
   mfaSecret                String?   @map("mfa_secret")
   mfaEnabled               Boolean   @default(false) @map("mfa_enabled")
   frentesAsignados         String[]  @default([]) @map("frentes_asignados")
@@ -121,6 +123,7 @@ model Usuario {
   roles                    UsuarioRol[]
   sesiones                 Sesion[]
   passwordResets           PasswordReset[]
+  verificacionesEmail      VerificacionEmail[]
 
   requisicionesCreadas     Requisicion[] @relation("RequisicionSolicitante")
   requisicionesAvaladas    Requisicion[] @relation("RequisicionAvalador")
@@ -191,6 +194,22 @@ model PasswordReset {
 
   @@index([usuarioId])
   @@map("password_reset")
+}
+
+// Token de verificación de correo (registro). Mismo patrón "selector.secret".
+model VerificacionEmail {
+  id         String    @id @default(uuid())
+  usuarioId  String    @map("usuario_id")
+  selector   String    @unique
+  tokenHash  String    @map("token_hash")
+  expiraAt   DateTime  @map("expira_at")
+  usadoAt    DateTime? @map("usado_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("verificacion_email")
 }
 
 // ============================================================

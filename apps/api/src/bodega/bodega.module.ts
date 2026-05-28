@@ -13,7 +13,7 @@ import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorat
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 
 @Injectable()
-class BodegaService {
+export class BodegaService {
   constructor(private prisma: PrismaService) {}
 
   async listEntradas(p: { page: number; pageSize: number }, tenantId: number) {

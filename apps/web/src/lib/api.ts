@@ -155,6 +155,10 @@ export const auth = {
     api<{ ok: boolean }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
   resetPassword: (token: string, newPassword: string) =>
     api<{ ok: boolean }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }), skipAuth: true }),
+  verifyEmail: (token: string) =>
+    api<{ ok: boolean }>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }), skipAuth: true }),
+  resendVerification: () => api<{ ok: boolean }>('/auth/resend-verification', { method: 'POST' }),
+  emailStatus: () => api<{ emailVerificado: boolean }>('/auth/email-status'),
 };
 
 export interface SignupPayload {

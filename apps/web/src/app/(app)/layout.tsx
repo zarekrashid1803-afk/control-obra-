@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { AppBar } from '@/components/app-bar';
+import { EmailVerifyBanner } from '@/components/email-verify-banner';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,7 +33,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppBar />
 
       {/* Contenido principal: en lg+ tiene padding-left igual al ancho del sidebar */}
-      <main className="flex-1 lg:ml-60 min-w-0">{children}</main>
+      <main className="flex-1 lg:ml-60 min-w-0">
+        <EmailVerifyBanner />
+        {children}
+      </main>
     </div>
   );
 }

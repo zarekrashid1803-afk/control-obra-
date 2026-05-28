@@ -15,6 +15,7 @@ import {
   extenderTrialSchema, ExtenderTrialInput,
 } from '@control-obra/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -93,7 +94,11 @@ export class TrialInterceptor implements NestInterceptor {
 // ============================================================
 @Injectable()
 export class PromoCodesService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+    private notifications: NotificationsService,
+  ) {}
 
   private generarCodigoUnico(): string {
     const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin O/0/I/1 para evitar confusiones
@@ -232,6 +237,9 @@ export class PromoCodesService {
       data: { usuarioId: result.user.id, selector, refreshTokenHash: refreshHash, expiraAt },
     });
 
+    // Enviar correo de verificación (fire-and-forget; se omite si no hay Resend).
+    void this.notifications.crearYEnviarVerificacion(result.user.id, result.user.email, result.user.nombres);
+
     return {
       accessToken,
       refreshToken,
@@ -351,6 +359,7 @@ class PromoCodesController {
 // ============================================================
 @Module({
   imports: [
+    NotificationsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-change-me',
       signOptions: { expiresIn: process.env.JWT_ACCESS_TTL || '15m' },

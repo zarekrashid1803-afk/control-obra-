@@ -277,6 +277,45 @@ export class AuthService {
     return { ok: true };
   }
 
+  // ============================================================
+  // Verificación de correo
+  // ============================================================
+
+  async verificarEmail(token: string) {
+    const [selector, secret] = (token || '').split('.');
+    if (!selector || !secret) throw new BadRequestException('Enlace inválido');
+    const v = await this.prisma.verificacionEmail.findUnique({ where: { selector } });
+    if (!v || v.usadoAt || v.expiraAt < new Date()) {
+      throw new BadRequestException('El enlace expiró o ya fue usado. Pide uno nuevo.');
+    }
+    const ok = await argon2.verify(v.tokenHash, secret);
+    if (!ok) throw new BadRequestException('Enlace inválido');
+    await this.prisma.$transaction([
+      this.prisma.usuario.update({
+        where: { id: v.usuarioId },
+        data: { emailVerificado: true, emailVerificadoAt: new Date() },
+      }),
+      this.prisma.verificacionEmail.update({ where: { id: v.id }, data: { usadoAt: new Date() } }),
+    ]);
+    return { ok: true };
+  }
+
+  async reenviarVerificacion(userId: string) {
+    const user = await this.prisma.usuario.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    if (user.emailVerificado) return { ok: true, yaVerificado: true };
+    await this.notifications.crearYEnviarVerificacion(user.id, user.email, user.nombres);
+    return { ok: true };
+  }
+
+  async emailStatus(userId: string) {
+    const user = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { emailVerificado: true },
+    });
+    return { emailVerificado: !!user?.emailVerificado };
+  }
+
   async hashPassword(password: string): Promise<string> {
     return argon2.hash(password);
   }

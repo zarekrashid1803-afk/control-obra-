@@ -37,6 +37,12 @@ export const resetPasswordSchema = z.object({
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
+// Verificación de correo
+export const verifyEmailSchema = z.object({
+  token: z.string().min(10),
+});
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
 export const authTokensResponse = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),

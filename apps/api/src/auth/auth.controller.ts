@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { loginSchema, refreshSchema, changePasswordSchema, mfaCodeSchema, forgotPasswordSchema, resetPasswordSchema, LoginInput, RefreshInput, ChangePasswordInput, MfaCodeInput, ForgotPasswordInput, ResetPasswordInput } from '@control-obra/shared';
+import { loginSchema, refreshSchema, changePasswordSchema, mfaCodeSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, LoginInput, RefreshInput, ChangePasswordInput, MfaCodeInput, ForgotPasswordInput, ResetPasswordInput, VerifyEmailInput } from '@control-obra/shared';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -83,6 +83,31 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(resetPasswordSchema))
   resetPassword(@Body() body: ResetPasswordInput) {
     return this.auth.resetPassword(body.token, body.newPassword);
+  }
+
+  // === Verificación de correo ===
+
+  @Public()
+  @Post('verify-email')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verificar correo con token' })
+  @UsePipes(new ZodValidationPipe(verifyEmailSchema))
+  verifyEmail(@Body() body: VerifyEmailInput) {
+    return this.auth.verificarEmail(body.token);
+  }
+
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post('resend-verification')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reenviar correo de verificación' })
+  resendVerification(@CurrentUser() user: AuthUser) {
+    return this.auth.reenviarVerificacion(user.id);
+  }
+
+  @Get('email-status')
+  @ApiOperation({ summary: 'Estado de verificación del correo del usuario actual' })
+  emailStatus(@CurrentUser() user: AuthUser) {
+    return this.auth.emailStatus(user.id);
   }
 
   // === MFA / 2FA ===
