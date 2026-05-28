@@ -87,6 +87,9 @@ export default function LoginPage() {
             autoComplete="current-password"
             className="w-full px-3.5 py-2.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-500/15"
           />
+          <div className="mt-1.5 text-right">
+            <a href="/forgot-password" className="text-[12px] text-navy-700 hover:underline">¿Olvidaste tu contraseña?</a>
+          </div>
         </div>
 
         {mfaRequired && (

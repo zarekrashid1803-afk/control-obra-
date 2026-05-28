@@ -103,6 +103,19 @@ export class UsuariosService {
     return { ok: true };
   }
 
+  /**
+   * Resetea el 2FA de un usuario (red de seguridad: si pierde el teléfono y
+   * queda bloqueado, un admin puede desactivárselo). Borra el secreto TOTP.
+   */
+  async resetMfa(id: string, tenantId: number) {
+    await this.getById(id, tenantId); // valida pertenencia al tenant
+    await this.prisma.usuario.update({
+      where: { id },
+      data: { mfaEnabled: false, mfaSecret: null },
+    });
+    return { ok: true, mfaEnabled: false };
+  }
+
   private toPublic(u: any) {
     return {
       id: u.id,

@@ -73,4 +73,11 @@ export class UsuariosController {
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.usuarios.softDelete(id, user.tenantId);
   }
+
+  @Post(':id/reset-mfa')
+  @RequireRoles('admin')
+  @ApiOperation({ summary: 'Desactivar el 2FA de un usuario (anti-bloqueo)' })
+  resetMfa(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.usuarios.resetMfa(id, user.tenantId);
+  }
 }

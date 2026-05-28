@@ -120,6 +120,7 @@ model Usuario {
   tenant                   Tenant    @relation(fields: [tenantId], references: [id])
   roles                    UsuarioRol[]
   sesiones                 Sesion[]
+  passwordResets           PasswordReset[]
 
   requisicionesCreadas     Requisicion[] @relation("RequisicionSolicitante")
   requisicionesAvaladas    Requisicion[] @relation("RequisicionAvalador")
@@ -173,6 +174,23 @@ model Sesion {
   @@index([usuarioId])
   @@index([refreshTokenHash])
   @@map("sesion")
+}
+
+// Token de recuperación de contraseña. token = "selector.secret"; se guarda
+// solo el hash del secreto. Un solo uso, expira en 1h.
+model PasswordReset {
+  id         String    @id @default(uuid())
+  usuarioId  String    @map("usuario_id")
+  selector   String    @unique
+  tokenHash  String    @map("token_hash")
+  expiraAt   DateTime  @map("expira_at")
+  usadoAt    DateTime? @map("usado_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("password_reset")
 }
 
 // ============================================================

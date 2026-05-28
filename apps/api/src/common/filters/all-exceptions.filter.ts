@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
+import * as Sentry from '@sentry/node';
 
 /**
  * Filtro global de excepciones. Garantiza que:
@@ -42,6 +43,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // 3) Cualquier otra cosa: 500 genérico. Log completo solo en servidor.
     const msg = exception instanceof Error ? exception.stack || exception.message : String(exception);
     this.logger.error(`Error no controlado en ${req.method} ${req.url}: ${msg}`);
+    // Reportar a Sentry (no-op si no hay SENTRY_DSN configurado).
+    Sentry.captureException(exception);
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Error interno del servidor',

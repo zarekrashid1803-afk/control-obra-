@@ -11,12 +11,14 @@ import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginInput, ChangePasswordInput } from '@control-obra/shared';
 import { encryptSecret, decryptSecret } from './crypto.util';
+import { NotificationsService } from '../notifications/notifications.module';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private notifications: NotificationsService,
   ) {}
 
   async login(input: LoginInput, meta: { ip?: string; userAgent?: string }) {
@@ -74,6 +76,9 @@ export class AuthService {
       data: { ultimoLoginAt: new Date() },
     });
 
+    // Limpieza oportunista de sesiones viejas (no bloquea el login).
+    void this.cleanupOldSessions(user.id);
+
     return {
       accessToken,
       refreshToken,
@@ -115,6 +120,24 @@ export class AuthService {
     });
 
     return { ok: true };
+  }
+
+  /**
+   * Borra sesiones vencidas o revocadas hace más de 7 días. La rotación crea
+   * una sesión nueva en cada refresh (~cada 15 min), así que sin esto la tabla
+   * crecería sin límite. Se conservan las revocadas recientes para que la
+   * detección de reuso de token siga funcionando.
+   */
+  private async cleanupOldSessions(usuarioId: string) {
+    const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    await this.prisma.sesion
+      .deleteMany({
+        where: {
+          usuarioId,
+          OR: [{ expiraAt: { lt: new Date() } }, { revocadoAt: { lt: hace7dias } }],
+        },
+      })
+      .catch(() => {});
   }
 
   /** Genera un refresh token "selector.secret" y el hash del secreto. */
@@ -191,6 +214,66 @@ export class AuthService {
       where: { usuarioId: userId, revocadoAt: null },
       data: { revocadoAt: new Date() },
     });
+    return { ok: true };
+  }
+
+  // ============================================================
+  // Recuperación de contraseña ("olvidé mi contraseña")
+  // ============================================================
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.usuario.findUnique({ where: { email } });
+    // Responder SIEMPRE ok: no revelar si el email existe (anti-enumeración).
+    if (!user || !user.activo || user.deletedAt) return { ok: true };
+
+    // Invalidar tokens previos no usados de este usuario.
+    await this.prisma.passwordReset.updateMany({
+      where: { usuarioId: user.id, usadoAt: null },
+      data: { usadoAt: new Date() },
+    });
+
+    const selector = crypto.randomBytes(12).toString('hex');
+    const secret = crypto.randomBytes(32).toString('hex');
+    const tokenHash = await argon2.hash(secret);
+    const expiraAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+
+    await this.prisma.passwordReset.create({
+      data: { usuarioId: user.id, selector, tokenHash, expiraAt },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://control-obra-web.vercel.app';
+    const link = `${frontendUrl}/reset-password?token=${selector}.${secret}`;
+    // Si no hay RESEND_API_KEY, EmailService loguea y no manda (no rompe).
+    await this.notifications.enviarResetPassword(user.email, user.nombres, link);
+
+    return { ok: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const [selector, secret] = (token || '').split('.');
+    if (!selector || !secret) throw new BadRequestException('Enlace inválido');
+
+    const pr = await this.prisma.passwordReset.findUnique({ where: { selector } });
+    if (!pr || pr.usadoAt || pr.expiraAt < new Date()) {
+      throw new BadRequestException('El enlace expiró o ya fue usado. Solicita uno nuevo.');
+    }
+    const ok = await argon2.verify(pr.tokenHash, secret);
+    if (!ok) throw new BadRequestException('Enlace inválido');
+
+    const newHash = await argon2.hash(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.usuario.update({
+        where: { id: pr.usuarioId },
+        data: { passwordHash: newHash, passwordChangeRequired: false },
+      }),
+      this.prisma.passwordReset.update({ where: { id: pr.id }, data: { usadoAt: new Date() } }),
+      // Revocar todas las sesiones: si fue un compromiso, cierra al atacante.
+      this.prisma.sesion.updateMany({
+        where: { usuarioId: pr.usuarioId, revocadoAt: null },
+        data: { revocadoAt: new Date() },
+      }),
+    ]);
+
     return { ok: true };
   }
 

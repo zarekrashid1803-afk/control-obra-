@@ -182,9 +182,43 @@ export class NotificationsService {
     }
   }
 
+  /** Email con el enlace para restablecer la contraseña. */
+  async enviarResetPassword(email: string, nombre: string, link: string): Promise<void> {
+    await this.email
+      .send({
+        to: email,
+        subject: '[Control de Obra] Restablece tu contraseña',
+        html: this.tplResetPassword({ nombre, link }),
+      })
+      .catch(() => {});
+  }
+
   // ============================================================
   // Templates HTML — minimalistas, inline styles para max compatibilidad
   // ============================================================
+  private tplResetPassword(d: { nombre: string; link: string }): string {
+    return `
+<div style="font-family:Inter,Arial,sans-serif;background:#f5f6f7;padding:24px;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#000;color:#fff;padding:20px 24px;">
+      <div style="font-size:11px;letter-spacing:2px;opacity:0.7;">CONTROL DE OBRA</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px;">Restablece tu contraseña</div>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 16px 0;">Hola ${this.escape(d.nombre)},</p>
+      <p style="margin:0 0 16px 0;">Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón para crear una nueva. El enlace expira en <strong>1 hora</strong>.</p>
+      <div style="margin-top:24px;">
+        <a href="${d.link}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Restablecer contraseña →</a>
+      </div>
+      <p style="margin:24px 0 0 0;font-size:12px;color:#686B6C;">Si no solicitaste esto, ignora este correo: tu contraseña no cambiará.</p>
+    </div>
+    <div style="padding:16px 24px;background:#f5f6f7;font-size:11px;color:#686B6C;text-align:center;">
+      Project by Orion · No respondas a este email.
+    </div>
+  </div>
+</div>`;
+  }
+
   private tplPendiente(d: {
     nombre: string; codigo: string; descripcion: string; montoFmt: string;
     solicitante: string; frente?: string; link: string;

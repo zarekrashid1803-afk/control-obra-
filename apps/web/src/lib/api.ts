@@ -130,6 +130,10 @@ export const auth = {
   mfaSetup: () => api<{ secret: string; otpauthUrl: string; qrDataUrl: string }>('/auth/mfa/setup', { method: 'POST' }),
   mfaEnable: (code: string) => api<{ ok: boolean; mfaEnabled: boolean }>('/auth/mfa/enable', { method: 'POST', body: JSON.stringify({ code }) }),
   mfaDisable: (code: string) => api<{ ok: boolean; mfaEnabled: boolean }>('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
+  forgotPassword: (email: string) =>
+    api<{ ok: boolean }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }), skipAuth: true }),
+  resetPassword: (token: string, newPassword: string) =>
+    api<{ ok: boolean }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }), skipAuth: true }),
 };
 
 export interface SignupPayload {
@@ -198,6 +202,7 @@ export const usuarios = {
   create: (body: any) => api('/usuarios', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: any) => api(`/usuarios/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id: string) => api(`/usuarios/${id}`, { method: 'DELETE' }),
+  resetMfa: (id: string) => api<{ ok: boolean; mfaEnabled: boolean }>(`/usuarios/${id}/reset-mfa`, { method: 'POST' }),
 };
 
 export const frentes = {

@@ -84,6 +84,16 @@ function UsuariosInner() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['usuarios'] }); closeDrawer(); },
   });
 
+  // Red de seguridad: si un usuario pierde su teléfono y queda bloqueado por
+  // 2FA, el admin se lo desactiva para que pueda volver a entrar.
+  const resetMfa = useMutation({
+    mutationFn: (id: string) => usuarios.resetMfa(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['usuarios'] });
+      setForm(f => ({ ...f, mfaEnabled: false }));
+    },
+  });
+
   function toggleRole(r: string) {
     setForm(f => ({ ...f, roles: f.roles.includes(r) ? f.roles.filter(x => x !== r) : [...f.roles, r] }));
   }
@@ -187,6 +197,16 @@ function UsuariosInner() {
           <>
             {editId && (
               <button onClick={() => { if (confirm('¿Desactivar este usuario?')) remove.mutate(editId); }} className="btn btn-secondary text-st-rechazada border-red-200 mr-auto">Desactivar</button>
+            )}
+            {editId && editing?.mfaEnabled && (
+              <button
+                onClick={() => { if (confirm('¿Resetear el 2FA de este usuario? Tendrá que volver a configurarlo.')) resetMfa.mutate(editId); }}
+                disabled={resetMfa.isPending}
+                className="btn btn-secondary"
+                title="Desactiva el 2FA si el usuario perdió acceso a su app"
+              >
+                {resetMfa.isPending ? 'Reseteando…' : 'Resetear 2FA'}
+              </button>
             )}
             <button onClick={closeDrawer} className="btn btn-secondary">Cancelar</button>
             <button onClick={() => save.mutate()} disabled={save.isPending} className="btn btn-primary">

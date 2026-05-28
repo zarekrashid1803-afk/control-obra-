@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { loginSchema, refreshSchema, changePasswordSchema, mfaCodeSchema, LoginInput, RefreshInput, ChangePasswordInput, MfaCodeInput } from '@control-obra/shared';
+import { loginSchema, refreshSchema, changePasswordSchema, mfaCodeSchema, forgotPasswordSchema, resetPasswordSchema, LoginInput, RefreshInput, ChangePasswordInput, MfaCodeInput, ForgotPasswordInput, ResetPasswordInput } from '@control-obra/shared';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -61,6 +61,28 @@ export class AuthController {
     @Body() body: ChangePasswordInput,
   ) {
     return this.auth.changePassword(user.id, body);
+  }
+
+  // === Recuperación de contraseña ===
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Solicitar enlace de recuperación de contraseña' })
+  @UsePipes(new ZodValidationPipe(forgotPasswordSchema))
+  forgotPassword(@Body() body: ForgotPasswordInput) {
+    return this.auth.forgotPassword(body.email);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Public()
+  @Post('reset-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Restablecer contraseña con token' })
+  @UsePipes(new ZodValidationPipe(resetPasswordSchema))
+  resetPassword(@Body() body: ResetPasswordInput) {
+    return this.auth.resetPassword(body.token, body.newPassword);
   }
 
   // === MFA / 2FA ===

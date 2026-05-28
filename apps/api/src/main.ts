@@ -3,7 +3,19 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
 import { AppModule } from './app.module';
+
+// Monitoreo de errores (opt-in): se activa SOLO si hay SENTRY_DSN configurado.
+// Sin DSN, captureException es un no-op → no rompe nada. Listo para producción.
+function initSentry() {
+  if (!process.env.SENTRY_DSN) return;
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0, // solo errores, sin performance tracing
+  });
+}
 
 // BigInt serialization in JSON responses
 (BigInt.prototype as any).toJSON = function () {
@@ -26,6 +38,7 @@ function assertProductionSecrets() {
 
 async function bootstrap() {
   assertProductionSecrets();
+  initSentry();
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));

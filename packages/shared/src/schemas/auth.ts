@@ -25,6 +25,18 @@ export const mfaCodeSchema = z.object({
 });
 export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
 
+// Recuperación de contraseña
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10),
+  newPassword: z.string().min(8, 'Mínimo 8 caracteres'),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
 export const authTokensResponse = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
