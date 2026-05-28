@@ -2,9 +2,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { frentes, usuarios, ApiError } from '@/lib/api';
+import { frentes, usuarios, ApiError, getApiErrorMessage } from '@/lib/api';
 import { Drawer } from '@/components/drawer';
-import { fmtCOP } from '@/lib/utils';
+import { fmtCOP, pesosACentavos } from '@/lib/utils';
 import { useVocab } from '@/lib/vocab';
 
 type FrenteForm = {
@@ -126,7 +126,7 @@ function FrentesInner() {
       const payload = {
         codigo: form.codigo,
         nombre: form.nombre,
-        presupuestoTotalCentavos: String(BigInt(Math.round(Number(form.presupuestoPesos.replace(/[^0-9.]/g, '')) * 100))),
+        presupuestoTotalCentavos: String(pesosACentavos(form.presupuestoPesos)),
         colorHex: form.colorHex,
         estado: form.estado,
         ubicacion: form.ubicacion || undefined,
@@ -147,8 +147,7 @@ function FrentesInner() {
     },
     onError: (err) => {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al guardar');
     },
   });

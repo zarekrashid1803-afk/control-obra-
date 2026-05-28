@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { caja, frentes, proveedores, ApiError } from '@/lib/api';
+import { caja, frentes, proveedores, ApiError, getApiErrorMessage } from '@/lib/api';
 import { fmtCOP } from '@/lib/utils';
 
 export default function NuevoMovimientoCajaPage() {
@@ -55,8 +55,7 @@ export default function NuevoMovimientoCajaPage() {
       router.push('/caja');
     } catch (err) {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al guardar movimiento');
     } finally {
       setSubmitting(false);

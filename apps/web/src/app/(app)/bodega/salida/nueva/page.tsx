@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { bodega, frentes, materiales, requisiciones, ApiError } from '@/lib/api';
+import { bodega, frentes, materiales, requisiciones, ApiError, getApiErrorMessage } from '@/lib/api';
 
 type Salida = {
   id: string;
@@ -56,8 +56,7 @@ export default function NuevaSalidaPage() {
       router.push('/bodega');
     } catch (err) {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al registrar salida');
     } finally {
       setSubmitting(false);

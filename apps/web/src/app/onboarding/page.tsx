@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { frentes, promoCodes, tenant as tenantApi, type Sector, ApiError } from '@/lib/api';
+import { frentes, promoCodes, tenant as tenantApi, type Sector, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { LogoOrion } from '@/components/logo-orion';
+import { pesosACentavos } from '@/lib/utils';
 
 const TIPOS_OBRA = [
   { value: 'construccion_nueva', label: 'Construcción nueva' },
@@ -50,7 +51,7 @@ export default function OnboardingPage() {
       await tenantApi.update({ sectorId });
       setStep(3);
     } catch (err) {
-      setError(err instanceof ApiError ? err.body?.message || 'Error al guardar sector' : 'Error');
+      setError(getApiErrorMessage(err, 'Error al guardar sector'));
     } finally {
       setSaving(false);
     }
@@ -63,16 +64,14 @@ export default function OnboardingPage() {
       await frentes.create({
         codigo: frente.codigo,
         nombre: frente.nombre,
-        presupuestoTotalCentavos: String(
-          BigInt(Math.round(Number(frente.presupuestoPesos.replace(/[^0-9.]/g, '')) * 100)),
-        ),
+        presupuestoTotalCentavos: String(pesosACentavos(frente.presupuestoPesos)),
         tipoObra: frente.tipoObra,
         ubicacion: frente.ubicacion || undefined,
         estado: 'activo',
       });
       setStep(4);
     } catch (err) {
-      setError(err instanceof ApiError ? err.body?.message || 'Error al crear el frente' : 'Error');
+      setError(getApiErrorMessage(err, 'Error al crear el frente'));
     } finally {
       setSaving(false);
     }

@@ -24,6 +24,7 @@ export const cerrarArqueoSchema = z.object({
   fecha: z.coerce.date(),
   saldoRealCentavos: moneyCentavosSchema,
   justificacionDiferencia: z.string().optional(),
-  mfaCode: z.string().length(6),
+  // Opcional: el backend lo exige y verifica SOLO si el usuario tiene 2FA activo.
+  mfaCode: z.string().length(6).optional(),
 });
 export type CerrarArqueoInput = z.infer<typeof cerrarArqueoSchema>;

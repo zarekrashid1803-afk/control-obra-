@@ -113,7 +113,8 @@ export class ReportesService {
     if (rango.desde) filtros['Desde'] = rango.desde.toLocaleDateString('es-CO');
     if (rango.hasta) filtros['Hasta'] = rango.hasta.toLocaleDateString('es-CO');
     if (frenteId) {
-      const frente = await this.prisma.frenteObra.findUnique({ where: { id: frenteId } });
+      // Scoped por tenant: no filtrar el label por un frente de otra empresa.
+      const frente = await this.prisma.frenteObra.findFirst({ where: { id: frenteId, tenantId } });
       if (frente) filtros['Frente'] = `${frente.codigo} ${frente.nombre}`;
     }
 

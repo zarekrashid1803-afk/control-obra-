@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ordenesCompra, requisiciones, proveedores, ApiError } from '@/lib/api';
+import { ordenesCompra, requisiciones, proveedores, ApiError, getApiErrorMessage } from '@/lib/api';
 import { fmtCOP } from '@/lib/utils';
 
 const IVA_RATE = 0.19;
@@ -129,8 +129,7 @@ function NuevaOCInner() {
       router.push(`/ordenes-compra/${oc.id}`);
     } catch (err) {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else {
         setError('Error al generar OC');
       }
@@ -246,7 +245,7 @@ function NuevaOCInner() {
                         <input
                           type="number"
                           value={Number(it.precioUnitarioCentavos) / 100}
-                          onChange={(e) => updateItem(idx, { precioUnitarioCentavos: BigInt(Math.round(Number(e.target.value) * 100)) })}
+                          onChange={(e) => updateItem(idx, { precioUnitarioCentavos: BigInt(Math.round((Number(e.target.value) || 0) * 100)) })}
                           className="input text-right w-32 py-1"
                         />
                       </td>

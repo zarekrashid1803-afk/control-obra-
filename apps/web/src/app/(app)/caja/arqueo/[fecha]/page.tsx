@@ -3,7 +3,7 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { caja, ApiError } from '@/lib/api';
+import { caja, getApiErrorMessage } from '@/lib/api';
 import { fmtCOP, fmtDate } from '@/lib/utils';
 
 export default function ArqueoPage({ params }: { params: Promise<{ fecha: string }> }) {
@@ -22,7 +22,7 @@ export default function ArqueoPage({ params }: { params: Promise<{ fecha: string
 
   const [saldoRealPesos, setSaldoRealPesos] = useState('');
   const [justificacion, setJustificacion] = useState('');
-  const [mfaCode, setMfaCode] = useState('123456');
+  const [mfaCode, setMfaCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -73,15 +73,13 @@ export default function ArqueoPage({ params }: { params: Promise<{ fecha: string
         fecha: new Date(fecha).toISOString(),
         saldoRealCentavos: String(saldoReal),
         justificacionDiferencia: justificacion || undefined,
-        mfaCode,
+        // Solo se envía si el usuario lo escribió (el backend lo exige solo con 2FA activo).
+        mfaCode: mfaCode.length === 6 ? mfaCode : undefined,
       });
       setSuccess(true);
       setTimeout(() => router.push('/caja'), 1500);
     } catch (err) {
-      if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
-      } else setError('Error al cerrar arqueo');
+      setError(getApiErrorMessage(err, 'Error al cerrar arqueo'));
     } finally {
       setSubmitting(false);
     }
@@ -216,16 +214,17 @@ export default function ArqueoPage({ params }: { params: Promise<{ fecha: string
                 Se requiere 2FA del responsable de caja.
               </div>
               <div>
-                <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">Código 2FA</label>
+                <label className="text-[11px] uppercase font-semibold text-gray-500 tracking-wider block mb-1.5">Código 2FA (si tienes activado)</label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value)}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   maxLength={6}
                   className="input text-center font-mono tracking-widest text-base"
                   placeholder="000000"
                 />
-                <div className="text-[10.5px] text-gray-500 mt-1">En beta acepta cualquier código de 6 dígitos (123456)</div>
+                <div className="text-[10.5px] text-gray-500 mt-1">Solo requerido si tu cuenta tiene verificación en dos pasos.</div>
               </div>
               <button
                 onClick={onCerrar}

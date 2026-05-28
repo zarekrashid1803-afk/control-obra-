@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { requisiciones, frentes, materiales, ApiError } from '@/lib/api';
+import { requisiciones, frentes, materiales, ApiError, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { fmtCOP } from '@/lib/utils';
 
@@ -99,8 +99,7 @@ export default function NuevaRequisicionPage() {
       router.push(`/requisiciones/${created.id}`);
     } catch (err) {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al crear requisición');
     } finally {
       setSubmitting(false);
@@ -217,13 +216,13 @@ export default function NuevaRequisicionPage() {
                       <input
                         type="number"
                         value={Number(it.precioUnitarioCentavos) / 100}
-                        onChange={(e) => updateItem(it.id, { precioUnitarioCentavos: BigInt(Math.round(Number(e.target.value) * 100)) })}
+                        onChange={(e) => updateItem(it.id, { precioUnitarioCentavos: BigInt(Math.round((Number(e.target.value) || 0) * 100)) })}
                         className="input bg-white text-right font-mono"
                         placeholder="Precio (opcional)"
                         min="0"
                       />
                       <div className="text-right tabular-nums font-medium text-navy-900 px-2">
-                        {fmtCOP(BigInt(Math.round(Number(it.precioUnitarioCentavos) * it.cantidad)), { full: true })}
+                        {fmtCOP(BigInt(Math.round(Number(it.precioUnitarioCentavos) * (it.cantidad || 0))), { full: true })}
                       </div>
                     </div>
                   </div>

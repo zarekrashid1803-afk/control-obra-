@@ -26,6 +26,18 @@ export function fmtCOP(centavosOrPesos: bigint | number | string, opts: { full?:
   }).format(pesos);
 }
 
+/**
+ * Convierte un string de pesos a centavos (BigInt) de forma SEGURA.
+ * Trata "." y "," como separadores de miles (uso colombiano: "1.000.000"),
+ * por lo que solo conserva dígitos → pesos enteros. Nunca produce BigInt(NaN)
+ * (un input inválido o vacío devuelve 0n), evitando crashes de RangeError.
+ */
+export function pesosACentavos(input: string | number): bigint {
+  const digits = String(input).replace(/[^0-9]/g, '');
+  if (!digits) return 0n;
+  return BigInt(digits) * 100n;
+}
+
 export function fmtDate(d: Date | string): string {
   return new Intl.DateTimeFormat('es-CO', {
     day: '2-digit',

@@ -3,7 +3,7 @@ import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ordenesCompra, bodega, ApiError } from '@/lib/api';
+import { ordenesCompra, bodega, ApiError, getApiErrorMessage } from '@/lib/api';
 import { fmtCOP } from '@/lib/utils';
 
 type ItemRecepcion = {
@@ -70,8 +70,7 @@ export default function RecepcionPage({ params }: { params: Promise<{ ocId: stri
       router.push('/bodega');
     } catch (err) {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al registrar entrada');
     } finally {
       setSubmitting(false);

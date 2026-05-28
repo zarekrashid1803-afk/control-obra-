@@ -54,7 +54,10 @@ export class FrentesService {
   }
 
   /** Recalcula el consumido sumando OC + caja menor. Llamado por triggers de servicio. */
-  async recalcularConsumido(frenteId: string) {
+  async recalcularConsumido(frenteId: string, tenantId: number) {
+    // Verificar que el frente sea del tenant antes de tocar nada (evita que un
+    // admin de otra empresa recalcule/sobreescriba un frente ajeno por UUID).
+    await this.getById(frenteId, tenantId);
     const [ocSum, movSum] = await Promise.all([
       this.prisma.ordenCompra.aggregate({
         where: { frenteId, estado: { not: 'anulada' } },

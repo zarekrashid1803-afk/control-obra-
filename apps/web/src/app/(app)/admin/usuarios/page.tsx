@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { usuarios, frentes, ApiError } from '@/lib/api';
+import { usuarios, frentes, ApiError, getApiErrorMessage } from '@/lib/api';
 import { Drawer } from '@/components/drawer';
 import { fmtDate } from '@/lib/utils';
 
@@ -38,8 +38,16 @@ function UsuariosInner() {
   });
   const frentesQ = useQuery({ queryKey: ['frentes'], queryFn: () => frentes.list() });
 
+  // Cargar el usuario a editar directo por id: la lista está paginada (100),
+  // así que buscarlo solo en la página visible fallaría para usuarios fuera de ella.
+  const editQ = useQuery({
+    queryKey: ['usuario', editId],
+    queryFn: () => usuarios.get(editId!),
+    enabled: !!editId,
+  });
+
   const data = listQ.data?.data || [];
-  const editing = data.find((u: any) => u.id === editId);
+  const editing: any = editId ? editQ.data : undefined;
 
   const [form, setForm] = useState<UsuarioForm>(EMPTY);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +81,7 @@ function UsuariosInner() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['usuarios'] }); closeDrawer(); },
     onError: (err) => {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al guardar');
     },
   });

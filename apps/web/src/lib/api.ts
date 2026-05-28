@@ -13,6 +13,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Extrae un mensaje de error legible de cualquier error de la API.
+ * Si es un error de validación Zod (trae `errors[]`), lista los campos que
+ * fallaron en vez del genérico "Validación falló". Úsalo en todos los catch
+ * de formularios.
+ */
+export function getApiErrorMessage(err: unknown, fallback = 'Ocurrió un error'): string {
+  if (err instanceof ApiError) {
+    const body = err.body as any;
+    if (Array.isArray(body?.errors) && body.errors.length) {
+      return body.errors
+        .map((e: any) => (e.path ? `${e.path}: ${e.message}` : e.message))
+        .join(' · ');
+    }
+    const msg = body?.message ?? err.message;
+    return typeof msg === 'string' ? msg : JSON.stringify(msg);
+  }
+  if (err instanceof Error) return err.message || fallback;
+  return fallback;
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('control_obra_token');

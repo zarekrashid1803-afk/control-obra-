@@ -7,7 +7,12 @@ import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorat
 class InventarioService {
   constructor(private prisma: PrismaService) {}
 
-  /** Existencias por material — agregando todos los frentes + bodega central (entradas - salidas) */
+  /**
+   * Existencias por material = suma de lo despachado a cada frente (inventarioFrente).
+   * NOTA: hoy NO se descuenta consumo en obra ni se lleva stock de bodega central;
+   * representa "material entregado a frentes", no un balance entradas−salidas.
+   * Un modelo de stock central + consumo es una decisión de producto pendiente.
+   */
   async existencias(filter: { frenteId?: string }, tenantId: number) {
     const materiales = await this.prisma.material.findMany({
       where: { deletedAt: null, activo: true, tenantId },

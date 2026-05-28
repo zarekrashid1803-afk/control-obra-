@@ -32,7 +32,13 @@ function makePrisma() {
       upsert: jest.fn(),
     },
     frenteObra: {
+      // Por defecto el frente pertenece al tenant del USER de prueba.
+      findUnique: jest.fn().mockResolvedValue({ tenantId: 7 }),
       update: jest.fn(),
+    },
+    usuario: {
+      // Por defecto el usuario no tiene MFA → no se exige código al cerrar arqueo.
+      findUnique: jest.fn().mockResolvedValue({ mfaEnabled: false, mfaSecret: null }),
     },
   };
   prisma.$transaction = jest.fn((cb: any) => cb(prisma));

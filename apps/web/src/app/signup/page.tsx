@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { promoCodes, setToken, setRefreshToken, ApiError } from '@/lib/api';
+import { promoCodes, setToken, setRefreshToken, ApiError, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { LogoOrion } from '@/components/logo-orion';
 
@@ -38,8 +38,7 @@ export default function SignupPage() {
       setUser(data.user);
       router.push('/onboarding');
     } catch (err) {
-      if (err instanceof ApiError) setError(err.body?.message || `Error ${err.status}`);
-      else setError('No se pudo conectar al servidor');
+      setError(getApiErrorMessage(err, 'No se pudo conectar al servidor'));
     } finally {
       submitting.current = false;
       setLoading(false);

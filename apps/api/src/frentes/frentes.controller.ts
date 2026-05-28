@@ -49,7 +49,7 @@ export class FrentesController {
 
   @Post(':id/recalcular-consumido')
   @RequireRoles('admin', 'director')
-  recalcular(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.recalcularConsumido(id);
+  recalcular(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.svc.recalcularConsumido(id, user.tenantId);
   }
 }

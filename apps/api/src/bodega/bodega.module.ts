@@ -63,11 +63,23 @@ class BodegaService {
         include: { items: true },
       });
 
-      // Actualizar estado de OC
-      const todosCompletos = input.items.every((it) => {
-        const esp = Number(esperadasById.get(it.ocItemId) || 0);
-        return Number(it.cantidadRecibida) >= esp;
+      // Recepción ACUMULADA: sumar lo recibido en TODAS las entradas de esta OC
+      // (incluida la recién creada), por ítem. Antes solo miraba los ítems que
+      // venían en este payload, así que una entrada parcial que omitía ítems
+      // marcaba la OC como "recibida_total" perdiendo lo que faltaba.
+      const todasLasEntradas = await tx.bodegaEntrada.findMany({
+        where: { ordenCompraId: input.ordenCompraId },
+        include: { items: true },
       });
+      const recibidoAcum = new Map<string, number>();
+      for (const e of todasLasEntradas) {
+        for (const it of e.items) {
+          recibidoAcum.set(it.ocItemId, (recibidoAcum.get(it.ocItemId) || 0) + Number(it.cantidadRecibida));
+        }
+      }
+      const todosCompletos = ocItems.every(
+        (oc) => (recibidoAcum.get(oc.id) || 0) >= Number(oc.cantidad),
+      );
       await tx.ordenCompra.update({
         where: { id: input.ordenCompraId },
         data: {

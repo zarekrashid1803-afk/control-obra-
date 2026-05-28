@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { proveedores, ApiError } from '@/lib/api';
+import { proveedores, ApiError, getApiErrorMessage } from '@/lib/api';
 import { Drawer } from '@/components/drawer';
 
 type ProveedorForm = {
@@ -79,8 +79,7 @@ function ProveedoresInner() {
     },
     onError: (err) => {
       if (err instanceof ApiError) {
-        const m = (err.body as any)?.message || err.message;
-        setError(typeof m === 'string' ? m : JSON.stringify(m));
+        setError(getApiErrorMessage(err));
       } else setError('Error al guardar');
     },
   });

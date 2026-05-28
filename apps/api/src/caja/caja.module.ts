@@ -1,8 +1,9 @@
 import {
   Body, ConflictException, Controller, Get, Injectable, Module,
-  NotFoundException, Param, ParseUUIDPipe, Post, Query,
+  NotFoundException, Param, ParseUUIDPipe, Post, Query, UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { authenticator } from 'otplib';
 import {
   createMovimientoCajaSchema, cerrarArqueoSchema,
   CreateMovimientoCajaInput, CerrarArqueoInput,
@@ -12,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RequireRoles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { decryptSecret } from '../auth/crypto.util';
 
 @Injectable()
 export class CajaService {
@@ -59,8 +61,16 @@ export class CajaService {
         autorizadoPorId: user.id,
       },
     });
-    // Actualizar consumido del frente si aplica
+    // Actualizar consumido del frente si aplica. Verificamos que el frente sea
+    // del mismo tenant para no afectar el presupuesto de otra empresa.
     if (input.frenteId && input.tipo === 'salida') {
+      const frente = await this.prisma.frenteObra.findUnique({
+        where: { id: input.frenteId },
+        select: { tenantId: true },
+      });
+      if (!frente || frente.tenantId !== user.tenantId) {
+        throw new NotFoundException('Frente no encontrado');
+      }
       await this.prisma.frenteObra.update({
         where: { id: input.frenteId },
         data: { consumidoCentavos: { increment: input.montoCentavos } },
@@ -75,19 +85,32 @@ export class CajaService {
     const fechaFin = new Date(fechaInicio);
     fechaFin.setHours(23, 59, 59, 999);
 
+    // Verificación 2FA: si quien cierra el arqueo tiene MFA activo, el código
+    // debe ser válido. (El schema lo dejaba pasar sin verificar nunca.)
+    const u = await this.prisma.usuario.findUnique({
+      where: { id: user.id },
+      select: { mfaEnabled: true, mfaSecret: true },
+    });
+    if (u?.mfaEnabled && u.mfaSecret) {
+      const ok = input.mfaCode
+        ? authenticator.verify({ token: input.mfaCode, secret: decryptSecret(u.mfaSecret) })
+        : false;
+      if (!ok) throw new UnauthorizedException('Código 2FA inválido o requerido para cerrar el arqueo');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.arqueoCaja.findUnique({
         where: { tenantId_fecha: { tenantId: user.tenantId, fecha: fechaInicio } },
       });
       if (existing?.cerradoAt) throw new ConflictException('Ya existe arqueo cerrado para esa fecha');
 
-      // Saldo del día anterior (esperado al inicio)
-      const ayer = new Date(fechaInicio);
-      ayer.setDate(ayer.getDate() - 1);
-      const ayerArqueo = await tx.arqueoCaja.findFirst({
-        where: { tenantId: user.tenantId, fecha: ayer },
+      // Saldo inicial = saldo real del ÚLTIMO arqueo cerrado anterior a esta
+      // fecha (no exactamente "ayer": tolera fines de semana/festivos sin arqueo).
+      const arqueoPrevio = await tx.arqueoCaja.findFirst({
+        where: { tenantId: user.tenantId, fecha: { lt: fechaInicio }, cerradoAt: { not: null } },
+        orderBy: { fecha: 'desc' },
       });
-      const saldoInicial = ayerArqueo?.saldoRealCentavos ?? 0n;
+      const saldoInicial = arqueoPrevio?.saldoRealCentavos ?? 0n;
 
       const movs = await tx.movimientoCaja.findMany({
         where: { fechaMovimiento: { gte: fechaInicio, lte: fechaFin }, tenantId: user.tenantId },
